@@ -1,0 +1,14 @@
+# 調査レポートは実在企業の分析を含むため公開リポジトリには含めない
+警備Pro_徹底調査レポート.md
+
+# ローカル設定
+.claude/
+
+# OS / エディタ
+.DS_Store
+._*
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+node_modules/

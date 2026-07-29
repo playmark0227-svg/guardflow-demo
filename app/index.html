@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GuardFlow β — 警備業務クラウド デモ</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🛡️ GuardFlow <span class="beta">β demo</span></div>
+  <nav class="role-switch">
+    <button data-action="role" data-role="guard" id="btn-role-guard">📱 隊員アプリ</button>
+    <button data-action="role" data-role="admin" id="btn-role-admin">🖥️ 管制センター</button>
+  </nav>
+  <div class="top-actions">
+    <button data-action="theme" id="btn-theme" title="テーマ切替（自動/ダーク/ライト）">🌓</button>
+    <button data-action="reset" title="デモデータをリセット">↺</button>
+  </div>
+</header>
+<main id="app"></main>
+<div id="toast-wrap"></div>
+<div id="print-area"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
