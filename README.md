@@ -2,7 +2,7 @@
 
 警備業向け業務管理システムのUIプロトタイプ。**隊員向けスマホアプリ**と**管制センター向けPC画面**の2面構成を、ビルド不要の静的Webアプリ（HTML / CSS / Vanilla JS）で実装しています。
 
-👉 **[デモを開く](https://playmark0227-svg.github.io/guardflow-demo/)**
+👉 **[デモを開く](https://playmark0227-svg.github.io/guardflow-demo/)** ／ 📘 **[画面説明資料（全24画面）](https://playmark0227-svg.github.io/guardflow-demo/docs/)**
 
 > これは実データを持たないUI検証用のプロトタイプです。表示される会社名・隊員名・現場名・金額はすべて架空のサンプルデータで、ブラウザの localStorage にのみ保存されます。サーバー送信は一切ありません。
 

@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GuardFlow β — 画面説明資料</title>
+<meta name="description" content="警備業向け業務管理システムのUIプロトタイプ。隊員向けスマホアプリと管制センターPC画面の全24画面を解説します。">
+<style>
+:root{
+  --navy:#13294f; --navy-2:#1e4079; --navy-ink:#fff;
+  --red:#c8102e;
+  --bg:#f4f6fa; --surface:#fff; --surface-2:#eef1f7;
+  --text:#16202f; --text-2:#4a5568; --muted:#7a8699;
+  --line:#dfe4ed;
+  --ok:#1a7f37; --ok-bg:#e6f4ea;
+  --warn:#9a5b00; --warn-bg:#fdf3dd;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(16,32,64,.06),0 8px 24px rgba(16,32,64,.08);
+  --maxw:1180px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --navy:#25467f; --navy-2:#3560a8;
+  --bg:#0e1420; --surface:#161e2c; --surface-2:#1e2836;
+  --text:#e7ecf5; --text-2:#a9b4c6; --muted:#8391a6;
+  --line:#2a3547;
+  --ok:#5cc27a; --ok-bg:#17301f;
+  --warn:#e0a53f; --warn-bg:#33280f;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}}
+[data-theme=dark]{
+  --navy:#25467f; --navy-2:#3560a8;
+  --bg:#0e1420; --surface:#161e2c; --surface-2:#1e2836;
+  --text:#e7ecf5; --text-2:#a9b4c6; --muted:#8391a6;
+  --line:#2a3547;
+  --ok:#5cc27a; --ok-bg:#17301f;
+  --warn:#e0a53f; --warn-bg:#33280f;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif;
+  line-height:1.75;-webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--navy-2)}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+
+/* ---- nav ---- */
+.nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--surface) 90%,transparent);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{max-width:var(--maxw);margin:0 auto;padding:10px 22px;display:flex;align-items:center;gap:18px}
+.nav-brand{font-weight:800;white-space:nowrap;letter-spacing:.2px}
+.nav-brand i{color:var(--red);font-style:normal}
+.nav-links{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{color:var(--text-2);text-decoration:none;font-size:13.5px;font-weight:600;
+  padding:6px 11px;border-radius:999px;white-space:nowrap}
+.nav-links a:hover{background:var(--surface-2);color:var(--text)}
+.nav-cta{background:var(--navy);color:#fff;text-decoration:none;font-weight:700;font-size:13.5px;
+  padding:8px 16px;border-radius:999px;white-space:nowrap}
+#themeBtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;
+  padding:6px 10px;cursor:pointer;font-size:15px;line-height:1}
+
+/* ---- hero ---- */
+.hero{background:linear-gradient(150deg,var(--navy) 0%,#0d1c38 100%);color:#fff;padding:64px 0 56px}
+.hero h1{font-size:clamp(30px,5vw,46px);line-height:1.25;margin:0 0 14px;letter-spacing:-.5px}
+.hero h1 i{color:#ff8a95;font-style:normal}
+.hero p{font-size:clamp(15px,2vw,17.5px);color:#c3d0e6;max-width:660px;margin:0 0 28px}
+.hero-tag{display:inline-block;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);
+  padding:5px 14px;border-radius:999px;font-size:12.5px;font-weight:700;margin-bottom:20px}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:38px}
+.btn{display:inline-block;text-decoration:none;font-weight:700;font-size:14.5px;padding:12px 24px;border-radius:11px}
+.btn-1{background:#fff;color:var(--navy)}
+.btn-2{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.28)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;
+  border-top:1px solid rgba(255,255,255,.16);padding-top:26px}
+.stat b{display:block;font-size:clamp(24px,3.4vw,32px);font-weight:800;letter-spacing:-.5px}
+.stat span{font-size:12.5px;color:#a9bcd8}
+
+/* ---- section ---- */
+section{padding:60px 0;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--red);font-weight:800;font-size:12.5px;letter-spacing:1.4px;margin:0 0 8px}
+h2{font-size:clamp(22px,3.4vw,29px);margin:0 0 12px;letter-spacing:-.4px;line-height:1.35}
+.lead{color:var(--text-2);max-width:720px;margin:0 0 34px;font-size:15.5px}
+h3{font-size:17.5px;margin:40px 0 6px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+h3 .n{background:var(--navy);color:#fff;font-size:12px;width:24px;height:24px;border-radius:7px;
+  display:grid;place-items:center;font-weight:800;flex:none}
+
+/* ---- 構成図 ---- */
+.arch{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:stretch;margin-bottom:14px}
+@media(max-width:760px){.arch{grid-template-columns:1fr}}
+.arch-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow)}
+.arch-box h4{margin:0 0 4px;font-size:16px}
+.arch-box .who{color:var(--red);font-size:12.5px;font-weight:800;margin-bottom:12px}
+.arch-box ul{margin:0;padding-left:19px;color:var(--text-2);font-size:13.5px}
+.arch-box li{margin:3px 0}
+.arch-mid{display:grid;place-items:center;color:var(--muted);font-size:12.5px;font-weight:700;
+  text-align:center;padding:0 4px}
+.arch-mid .ar{font-size:26px;color:var(--navy-2);line-height:1}
+@media(max-width:760px){.arch-mid .ar{transform:rotate(90deg)}}
+
+/* ---- 画面ギャラリー ---- */
+.grid-sp{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:30px 24px}
+.grid-pc{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:34px 26px}
+.grid-doc{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:30px 24px}
+figure{margin:0}
+figure a{display:block;text-decoration:none}
+/* 端末フレーム */
+.phone{background:#12161d;border-radius:30px;padding:9px;box-shadow:var(--shadow);
+  border:1px solid #262c36;transition:transform .18s ease}
+.phone img{border-radius:22px}
+figure a:hover .phone{transform:translateY(-4px)}
+.laptop{background:var(--surface);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+  box-shadow:var(--shadow);transition:transform .18s ease}
+.laptop .bar{background:var(--surface-2);border-bottom:1px solid var(--line);padding:7px 11px;
+  display:flex;gap:5px;align-items:center}
+.laptop .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.laptop .url{margin-left:8px;font-size:10.5px;color:var(--muted);font-family:ui-monospace,monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+figure a:hover .laptop{transform:translateY(-4px)}
+.paper{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;
+  box-shadow:var(--shadow);transition:transform .18s ease}
+figure a:hover .paper{transform:translateY(-4px)}
+figcaption{margin-top:11px}
+figcaption>b{display:block;font-size:14.5px}
+figcaption>span{display:block;color:var(--text-2);font-size:12.5px;line-height:1.6;margin-top:2px}
+figcaption span b{color:var(--navy-2)}
+.pill{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;
+  background:var(--ok-bg);color:var(--ok);margin-top:6px}
+.pill-w{background:var(--warn-bg);color:var(--warn)}
+
+/* ---- テーブル ---- */
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px}
+th{background:var(--surface-2);text-align:left;padding:12px 16px;font-size:12.5px;
+  color:var(--text-2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td b{color:var(--navy-2)}
+
+/* ---- カード ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow)}
+.card .ic{font-size:24px;line-height:1;margin-bottom:10px}
+.card h4{margin:0 0 6px;font-size:15.5px}
+.card p{margin:0;color:var(--text-2);font-size:13.5px;line-height:1.7}
+
+/* ---- 注意 ---- */
+.note{background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);
+  border-radius:var(--radius);padding:20px 24px}
+.note h4{margin:0 0 10px;color:var(--warn);font-size:15.5px}
+.note ul{margin:0;padding-left:20px;font-size:14px;color:var(--text)}
+.note li{margin:7px 0}
+
+footer{padding:40px 0 60px;color:var(--muted);font-size:13px;text-align:center}
+footer a{color:var(--navy-2)}
+@media print{
+  .nav,.hero-btns,#themeBtn{display:none}
+  body{background:#fff}
+  section{page-break-inside:avoid;border-bottom:1px solid #ddd}
+  .grid-pc,.grid-sp,.grid-doc{gap:16px}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-in">
+    <span class="nav-brand">🛡 GuardFlow <i>β</i></span>
+    <span class="nav-links">
+      <a href="#overview">概要</a>
+      <a href="#arch">構成</a>
+      <a href="#sp">スマホ画面</a>
+      <a href="#pc">PC画面</a>
+      <a href="#doc">帳票</a>
+      <a href="#design">設計方針</a>
+      <a href="#tech">技術</a>
+      <a href="#limit">前提</a>
+    </span>
+    <button id="themeBtn" title="ダーク／ライト切替">🌓</button>
+    <a class="nav-cta" href="../" target="_blank" rel="noopener">デモを開く ↗</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="hero-tag">UIプロトタイプ / 動作するデモ</span>
+    <h1>警備業務を、現場から経営まで<br>ひとつの画面でつなぐ<i>.</i></h1>
+    <p>隊員が持つスマホアプリと、事務所の管制センター画面。
+       配置から勤怠・請求・給与・法定帳票までを一本のデータで通す業務システムの UI プロトタイプです。
+       実際にブラウザで操作できます。</p>
+    <div class="hero-btns">
+      <a class="btn btn-1" href="../" target="_blank" rel="noopener">デモを操作する</a>
+      <a class="btn btn-2" href="#sp">画面を見る</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>24</b><span>画面 / 帳票</span></div>
+      <div class="stat"><b>2</b><span>利用者面（隊員 / 管制）</span></div>
+      <div class="stat"><b>0</b><span>外部ライブラリ依存</span></div>
+      <div class="stat"><b>1,700</b><span>行（HTML/CSS/JS）</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <p class="eyebrow">OVERVIEW</p>
+    <h2>何を作ったのか</h2>
+    <p class="lead">警備会社の業務は「誰を・どの現場に・何時から立たせるか」という配置管理を起点に、
+      勤怠・請求・給与・法定教育・備付書類まで一続きにつながっています。
+      その全体を、隊員側と管制側の2つの画面から操作できる形で組み立てました。</p>
+    <div class="cards">
+      <div class="card"><div class="ic">📱</div><h4>隊員は「押すだけ」</h4>
+        <p>文字入力を極力なくし、選んでタップするだけで上下番報告が完了します。シニア層の隊員が多い現場を想定した設計です。</p></div>
+      <div class="card"><div class="ic">🖥️</div><h4>管制は「一画面で把握」</h4>
+        <p>誰が出発し、誰がまだ動いていないか。配置の過不足はどこか。判断に必要な情報を1画面に集約しています。</p></div>
+      <div class="card"><div class="ic">🔗</div><h4>データは一本</h4>
+        <p>配置を入力すると、勤怠・請求・給与・収支まで自動で連動します。転記作業とその過程で起きるミスが発生しません。</p></div>
+      <div class="card"><div class="ic">⚖️</div><h4>法令対応を内蔵</h4>
+        <p>新任20時間・現任10時間の法定教育の進捗管理と、警備員名簿など備付書類の出力に対応しています。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <div class="wrap">
+    <p class="eyebrow">ARCHITECTURE</p>
+    <h2>2つの画面と、その間を流れるデータ</h2>
+    <p class="lead">同じデータベースを、立場の違う2種類の利用者が別々の画面から触ります。
+      隊員が打刻すれば管制の画面が即座に変わり、管制が配置を組めば隊員のシフトに反映されます。</p>
+    <div class="arch">
+      <div class="arch-box">
+        <h4>📱 隊員アプリ（スマートフォン）</h4>
+        <div class="who">現場に立つ警備員が使う</div>
+        <ul>
+          <li>お知らせの受信</li>
+          <li>出発・合流・上番・下番・休憩の報告</li>
+          <li>シフトの確認と現場詳細（地図・同配置者）</li>
+          <li>休暇申請</li>
+          <li>給与明細の閲覧とPDF保存</li>
+        </ul>
+      </div>
+      <div class="arch-mid">
+        <div>打刻・申請 →<div class="ar">⇄</div>← 配置・通知</div>
+      </div>
+      <div class="arch-box">
+        <h4>🖥️ 管制センター（PC）</h4>
+        <div class="who">管制員・事務・経営者が使う</div>
+        <ul>
+          <li>ダッシュボード（入力漏れ・売上推移・タスク）</li>
+          <li>勤務管理（配置）／上下番モニター</li>
+          <li>請求・入金・給与</li>
+          <li>帳票・マスタ・有休・教育管理</li>
+          <li>収支分析（経営モード）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sp">
+  <div class="wrap">
+    <p class="eyebrow">SMARTPHONE</p>
+    <h2>隊員アプリ（スマホ画面）</h2>
+    <p class="lead">下部5タブ構成。現場では手袋をしていたり、暗かったり、急いでいたりします。
+      1タップの誤りが勤怠データの誤りに直結するため、押す対象は大きく、状態は色で分かるようにしています。
+      画像をクリックすると原寸で開きます。</p>
+    <div class="grid-sp">
+
+      <figure><a href="img/sp-notice.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-notice.png" alt="お知らせ画面" loading="lazy"></div></a>
+        <figcaption><b>① お知らせ</b><span>管制からの一斉連絡。未読は赤バッジで示し、開くまで消えません。</span></figcaption></figure>
+
+      <figure><a href="img/sp-report.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-report.png" alt="勤怠報告画面" loading="lazy"></div></a>
+        <figcaption><b>② 勤怠報告</b><span>報告種別を選び、対象シフトを選んで「報告する」。GPS が自動で添付されます。</span></figcaption></figure>
+
+      <figure><a href="img/sp-report-offline.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-report-offline.png" alt="圏外モードの勤怠報告画面" loading="lazy"></div></a>
+        <figcaption><b>③ 勤怠報告（圏外時）</b><span>電波がなくても打刻できます。端末に保存し、通信回復時に自動送信。</span><span class="pill">独自機能</span></figcaption></figure>
+
+      <figure><a href="img/sp-shift.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-shift.png" alt="シフト管理画面" loading="lazy"></div></a>
+        <figcaption><b>④ シフト管理</b><span>今後2週間の勤務を一覧。日付・現場名・時間を1行で確認できます。</span></figcaption></figure>
+
+      <figure><a href="img/sp-shift-detail.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-shift-detail.png" alt="シフト詳細画面" loading="lazy"></div></a>
+        <figcaption><b>⑤ シフト詳細</b><span>得意先・配置先・住所・同配置者・備考。地図／トイレ／コンビニを現場周辺で検索できます。</span></figcaption></figure>
+
+      <figure><a href="img/sp-leave.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-leave.png" alt="休暇申請カレンダー" loading="lazy"></div></a>
+        <figcaption><b>⑥ 休暇申請</b><span>月カレンダー表示。申請済／交渉可／承認済／棄却を色で判別します。</span></figcaption></figure>
+
+      <figure><a href="img/sp-leave-edit.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-leave-edit.png" alt="休暇申請の編集モード" loading="lazy"></div></a>
+        <figcaption><b>⑦ 休暇申請（編集）</b><span>「編集」を押すと日付をタップして申請。もう一度押すと取り消せます。</span></figcaption></figure>
+
+      <figure><a href="img/sp-pay.png" target="_blank" rel="noopener"><div class="phone"><img src="img/sp-pay.png" alt="給与管理画面" loading="lazy"></div></a>
+        <figcaption><b>⑧ 給与管理</b><span>支給・控除の内訳を明細表で表示。<b>PDF保存・印刷に対応</b>しています。</span><span class="pill">独自機能</span></figcaption></figure>
+
+    </div>
+  </div>
+</section>
+
+<section id="pc">
+  <div class="wrap">
+    <p class="eyebrow">DESKTOP</p>
+    <h2>管制センター（PC画面 / 管理者画面）</h2>
+    <p class="lead">左サイドバーに9つの主要メニュー、下部に教育管理と収支分析への導線。
+      管制員が1日中開いたままにする画面なので、情報密度を上げつつ、異常だけが色で浮き上がるようにしています。</p>
+    <div class="grid-pc">
+
+      <figure><a href="img/pc-dash.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / ダッシュボード</span></div><img src="img/pc-dash.png" alt="ダッシュボード" loading="lazy"></div></a>
+        <figcaption><b>① ダッシュボード</b><span>明日の配置入力漏れ、昨日のチェック漏れ、売上推移（前年比）、優先タスク。朝一番に見る画面です。タスクはクリックで該当画面へ飛びます。</span></figcaption></figure>
+
+      <figure><a href="img/pc-board.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 勤務管理</span></div><img src="img/pc-board.png" alt="勤務管理（管制ボード）" loading="lazy"></div></a>
+        <figcaption><b>② 勤務管理（管制ボード）</b><span>未配置の隊員を現場カードへドラッグ&ドロップ。人員不足の現場はオレンジ枠で警告。<b>出入り禁止・相性NG・ダブルブッキングは自動でブロック</b>されます。</span><span class="pill">中核機能</span></figcaption></figure>
+
+      <figure><a href="img/pc-monitor.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 上下番モニター</span></div><img src="img/pc-monitor.png" alt="上下番モニター" loading="lazy"></div></a>
+        <figcaption><b>③ 上下番モニター</b><span>出発 → 上番 → 下番の進行を一覧。GPS位置を地図リンクで確認でき、開始30分前を過ぎても未出発の隊員は赤く警告します。</span></figcaption></figure>
+
+      <figure><a href="img/pc-billing.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 請求管理</span></div><img src="img/pc-billing.png" alt="請求管理" loading="lazy"></div></a>
+        <figcaption><b>④ 請求管理</b><span>配置実績から現場別の請求額を自動算出。そのまま請求書PDFを出力できます。</span></figcaption></figure>
+
+      <figure><a href="img/pc-deposit.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 入金管理</span></div><img src="img/pc-deposit.png" alt="入金管理" loading="lazy"></div></a>
+        <figcaption><b>⑤ 入金管理</b><span>請求に対する入金の消込。入金済／未入金を切り替えて管理します。</span></figcaption></figure>
+
+      <figure><a href="img/pc-payroll.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 給与管理</span></div><img src="img/pc-payroll.png" alt="給与管理" loading="lazy"></div></a>
+        <figcaption><b>⑥ 給与管理</b><span>隊員別の支給額一覧。深夜25%・残業125%の割増と社会保険料を自動計算し、明細をPDF出力します。</span></figcaption></figure>
+
+      <figure><a href="img/pc-reports.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 帳票管理</span></div><img src="img/pc-reports.png" alt="帳票管理" loading="lazy"></div></a>
+        <figcaption><b>⑦ 帳票管理</b><span>警備員名簿・配置予定表など、法定備付書類を含む各種帳票の出力メニューです。</span></figcaption></figure>
+
+      <figure><a href="img/pc-master.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / マスタ管理</span></div><img src="img/pc-master.png" alt="マスタ管理" loading="lazy"></div></a>
+        <figcaption><b>⑧ マスタ管理</b><span>隊員マスタと現場マスタ。保有資格、配置NG理由、単価、必要人数などを保持します。</span></figcaption></figure>
+
+      <figure><a href="img/pc-leave.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 有休管理</span></div><img src="img/pc-leave.png" alt="有休管理" loading="lazy"></div></a>
+        <figcaption><b>⑨ 有休管理</b><span>隊員アプリから届いた休暇申請を、承認／交渉可／棄却で処理。結果は即座にアプリへ反映されます。</span></figcaption></figure>
+
+      <figure><a href="img/pc-edu.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 教育管理</span></div><img src="img/pc-edu.png" alt="教育管理" loading="lazy"></div></a>
+        <figcaption><b>⑩ 教育管理</b><span>警備業法が定める新任20時間・現任10時間の受講進捗をバーで可視化。未達者を年度末前に検知します。</span><span class="pill">法令対応</span></figcaption></figure>
+
+      <figure><a href="img/pc-finance.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 収支分析</span></div><img src="img/pc-finance.png" alt="収支分析（経営モード）" loading="lazy"></div></a>
+        <figcaption><b>⑪ 収支分析（経営モード）</b><span>現場ごとの請求・人件費・粗利・粗利率。低粗利の現場を色で警告します。配置を変更すると即時に再計算されます。</span></figcaption></figure>
+
+      <figure><a href="img/pc-msg.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 伝言板</span></div><img src="img/pc-msg.png" alt="アプリ用伝言板" loading="lazy"></div></a>
+        <figcaption><b>⑫ アプリ用伝言板</b><span>隊員アプリの「お知らせ」へ配信する画面。送信すると全隊員の端末に即座に届きます。</span></figcaption></figure>
+
+    </div>
+  </div>
+</section>
+
+<section id="doc">
+  <div class="wrap">
+    <p class="eyebrow">DOCUMENTS</p>
+    <h2>帳票出力</h2>
+    <p class="lead">画面上のデータからそのまま印刷レイアウトを生成します。ブラウザの印刷機能でPDF保存できるため、
+      別途の帳票ソフトを必要としません。</p>
+    <div class="grid-doc">
+      <figure><a href="img/doc-payslip.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-payslip.png" alt="給与支給明細書" loading="lazy"></div></a>
+        <figcaption><b>給与支給明細書</b><span>勤怠・支給・控除・差引支給額。隊員アプリからも同じものを出力できます。</span></figcaption></figure>
+      <figure><a href="img/doc-invoice.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-invoice.png" alt="請求書" loading="lazy"></div></a>
+        <figcaption><b>請求書</b><span>得意先宛。人数×時間×単価の内訳と消費税、振込先を記載します。</span></figcaption></figure>
+      <figure><a href="img/doc-roster.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-roster.png" alt="警備員名簿" loading="lazy"></div></a>
+        <figcaption><b>警備員名簿</b><span>警備業法施行規則が定める備付書類のひとつ。立入検査時の提出を想定しています。</span><span class="pill">法令対応</span></figcaption></figure>
+      <figure><a href="img/doc-schedule.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-schedule.png" alt="配置予定表" loading="lazy"></div></a>
+        <figcaption><b>配置予定表</b><span>指定日の現場別配置一覧。現場へ持ち出す紙の指示書として使えます。</span></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="design">
+  <div class="wrap">
+    <p class="eyebrow">DESIGN DECISIONS</p>
+    <h2>なぜこの作りにしたのか</h2>
+    <p class="lead">業界で使われている既存の隊員向けアプリについて、アプリストアに公開されているレビューを調べたところ、
+      同じ種類の不満が繰り返し投稿されていました。それらは技術的にはいずれも解決可能なものです。
+      本プロトタイプでは、その一つひとつに具体的な設計で応えています。</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>現場で起きている問題</th><th>本プロトタイプでの解決</th><th>該当画面</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>日をまたぐ夜勤で出発報告ができない</b><br><span style="color:var(--text-2);font-size:13px">0:00開始の勤務は、前夜に家を出る時点では「前日」扱いになり打刻できない</span></td>
+            <td>勤務日と打刻日を別々に持ち、<b>前夜からの出発報告を許可</b>。該当シフトには「日跨ぎ夜勤・前夜出発可」と明示します。</td>
+            <td>スマホ ②</td>
+          </tr>
+          <tr>
+            <td><b>圏外・ピーク時に打刻できない</b><br><span style="color:var(--text-2);font-size:13px">高架下やトンネル、朝夕の混雑時にサーバーへ到達できない</span></td>
+            <td>打刻をまず<b>端末内のキューに保存</b>し、通信回復時に自動送信。件数を画面に表示して未送信を隠しません。</td>
+            <td>スマホ ③</td>
+          </tr>
+          <tr>
+            <td><b>給与明細が閲覧のみで印刷できない</b><br><span style="color:var(--text-2);font-size:13px">紙の明細が廃止された一方、住宅ローン等で必要な控えが取れない</span></td>
+            <td>明細画面から<b>PDF保存・印刷</b>を可能に。管制側からも同じ帳票を出力できます。</td>
+            <td>スマホ ⑧ / 帳票</td>
+          </tr>
+          <tr>
+            <td><b>暗所で画面が読めない</b><br><span style="color:var(--text-2);font-size:13px">夜間現場でダークモード非対応だと白背景に白文字になる箇所がある</span></td>
+            <td>全画面を<b>ライト／ダーク両対応</b>で設計。時刻表示などの数値も両モードで検証済みです。</td>
+            <td>全画面</td>
+          </tr>
+          <tr>
+            <td><b>どの日を編集中か分からなくなる</b><br><span style="color:var(--text-2);font-size:13px">勤務可否の入力中に対象日を見失う</span></td>
+            <td>行・セルごとに<b>日付を常時表示</b>し、申請状態を4色で判別できるようにしました。</td>
+            <td>スマホ ⑥⑦</td>
+          </tr>
+          <tr>
+            <td><b>配置ミスが後から発覚する</b><br><span style="color:var(--text-2);font-size:13px">出入り禁止の現場や、同時に置いてはいけない組み合わせを管制員の記憶に頼っている</span></td>
+            <td>配置操作の時点で<b>自動判定してブロック</b>。理由も画面に表示します。注意喚起レベルは警告付きで配置を続行できます。</td>
+            <td>PC ②</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="tech">
+  <div class="wrap">
+    <p class="eyebrow">TECHNICAL</p>
+    <h2>技術構成</h2>
+    <p class="lead">意図的に依存を持たない構成にしています。ビルド工程がないため、
+      ファイルを置けばどこでも動き、5年後に開いても壊れません。</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>実装</td><td>HTML / CSS / JavaScript（ES Modules）のみ。フレームワーク・外部ライブラリは<b>一切なし</b></td></tr>
+          <tr><td>ビルド</td><td>不要。ファイルをそのまま配信します</td></tr>
+          <tr><td>データ保存</td><td>ブラウザの localStorage。<b>サーバーへの送信は一切ありません</b></td></tr>
+          <tr><td>配信</td><td>GitHub Pages（main ブランチへの push で自動デプロイ）</td></tr>
+          <tr><td>対応環境</td><td>Chrome / Safari / Edge の最新版。スマホ・タブレット・PC のいずれでも動作</td></tr>
+          <tr><td>位置情報</td><td>ブラウザの Geolocation API。許可されない場合はデモ用の座標にフォールバック</td></tr>
+          <tr><td>帳票出力</td><td>CSS の <code>@media print</code>。ブラウザの印刷機能からPDF保存</td></tr>
+          <tr><td>規模</td><td>約1,700行（JS 1,261行 / CSS 423行 / HTML 20行）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="limit">
+  <div class="wrap">
+    <p class="eyebrow">SCOPE</p>
+    <h2>前提と制約</h2>
+    <p class="lead">検討を進めるうえで誤解が生じないよう、このプロトタイプが「何ではないか」を明記します。</p>
+    <div class="note">
+      <h4>⚠ 確認しておきたいこと</h4>
+      <ul>
+        <li><b>これは UI 検証用のプロトタイプであり、実運用可能な製品ではありません。</b>既存の警備システム製品のソースコードやデータを利用したものではなく、ゼロから実装したものです。</li>
+        <li><b>データはブラウザ内にのみ保存されます。</b>サーバーもデータベースも存在しないため、別の端末とデータを共有することはできません。ログイン認証もありません。</li>
+        <li><b>表示される情報はすべて架空のサンプルです。</b>会社名・隊員名・現場名・金額・住所に実在のものは含まれません。</li>
+        <li><b>実運用には別途バックエンドの構築が必要です。</b>データベース、認証、権限管理、バックアップ、監査ログなどが該当します。</li>
+        <li><b>法令要件は一部のみ実装しています。</b>教育進捗管理と警備員名簿には対応していますが、備付書類8種すべて・年末調整・全銀フォーマット出力などは未実装です。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><b>GuardFlow β</b> — 警備業務クラウド UIプロトタイプ<br>
+    <a href="../" target="_blank" rel="noopener">デモを開く</a> ・
+    <a href="https://github.com/playmark0227-svg/guardflow-demo" target="_blank" rel="noopener">ソースコード（GitHub）</a></p>
+    <p style="margin-top:14px;font-size:12px">本資料に掲載した画面はすべてデモデータによる実際の画面キャプチャです。</p>
+  </div>
+</footer>
+
+<script>
+const b = document.getElementById('themeBtn');
+const saved = localStorage.getItem('gf-doc-theme');
+if (saved) document.documentElement.setAttribute('data-theme', saved);
+b.addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme')
+    || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('gf-doc-theme', next);
+});
+</script>
+</body>
+</html>
