@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GuardFlow β — 画面説明資料</title>
-<meta name="description" content="警備業向け業務管理システムのUIプロトタイプ。隊員向けスマホアプリと管制センターPC画面の全24画面を解説します。">
+<meta name="description" content="警備業向け業務管理システムのUIプロトタイプ。隊員向けスマホアプリと管制センターPC画面の全29画面を解説します。">
 <style>
 :root{
   --navy:#13294f; --navy-2:#1e4079; --navy-ink:#fff;
@@ -199,10 +199,10 @@ footer a{color:var(--navy-2)}
       <a class="btn btn-2" href="#sp">画面を見る</a>
     </div>
     <div class="stats">
-      <div class="stat"><b>24</b><span>画面 / 帳票</span></div>
+      <div class="stat"><b>29</b><span>画面 / 帳票</span></div>
       <div class="stat"><b>2</b><span>利用者面（隊員 / 管制）</span></div>
       <div class="stat"><b>0</b><span>外部ライブラリ依存</span></div>
-      <div class="stat"><b>1,700</b><span>行（HTML/CSS/JS）</span></div>
+      <div class="stat"><b>2,600</b><span>行（HTML/CSS/JS）</span></div>
     </div>
   </div>
 </header>
@@ -317,32 +317,39 @@ footer a{color:var(--navy-2)}
       <figure><a href="img/pc-monitor.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 上下番モニター</span></div><img src="img/pc-monitor.png" alt="上下番モニター" loading="lazy"></div></a>
         <figcaption><b>③ 上下番モニター</b><span>出発 → 上番 → 下番の進行を一覧。GPS位置を地図リンクで確認でき、開始30分前を過ぎても未出発の隊員は赤く警告します。</span></figcaption></figure>
 
+
+      <figure><a href="img/pc-gantt.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 勤務ガント（14日間）</span></div><img src="img/pc-gantt.png" alt="勤務ガント（14日間）" loading="lazy"></div></a>
+        <figcaption><b>④ 勤務ガント（14日間）</b><span>行が隊員、列が日。営業所ごとにグループ化し、バーは現場名。上部の「行き先カード」で<b>今日どの隊員がどこへ行くか</b>が一目で分かります。右端に勤務日数・実働・賃金と<b>6連勤の警告</b>。</span><span class="pill">中核機能</span></figcaption></figure>
+      <figure><a href="img/pc-gantt-month.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 勤務ガント（月単位）</span></div><img src="img/pc-gantt-month.png" alt="勤務ガント（月単位）" loading="lazy"></div></a>
+        <figcaption><b>⑤ 勤務ガント（月単位）</b><span>1か月を1画面に。狭い列に合わせて現場を1文字マーク（青／環／祭／港／首）で表示し、凡例に対応表を出します。日本の勤務表に近い形で<b>1か月の勤務パターン</b>が読めます。</span></figcaption></figure>
+      <figure><a href="img/pc-gantt-hour.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 勤務ガント（時間単位）</span></div><img src="img/pc-gantt-hour.png" alt="勤務ガント（時間単位）" loading="lazy"></div></a>
+        <figcaption><b>⑥ 勤務ガント（時間単位）</b><span>1日を時間軸で。点線が予定、実線が打刻からの実働で、<b>予実を上下に重ねて比較</b>できます。休憩でバーが分割され、深夜帯（22:00〜翌5:00）は斜線で表示。</span></figcaption></figure>
       <figure><a href="img/pc-billing.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 請求管理</span></div><img src="img/pc-billing.png" alt="請求管理" loading="lazy"></div></a>
-        <figcaption><b>④ 請求管理</b><span>配置実績から現場別の請求額を自動算出。そのまま請求書PDFを出力できます。</span></figcaption></figure>
+        <figcaption><b>⑦ 請求管理</b><span>配置実績から現場別の請求額を自動算出。そのまま請求書PDFを出力できます。</span></figcaption></figure>
 
       <figure><a href="img/pc-deposit.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 入金管理</span></div><img src="img/pc-deposit.png" alt="入金管理" loading="lazy"></div></a>
-        <figcaption><b>⑤ 入金管理</b><span>請求に対する入金の消込。入金済／未入金を切り替えて管理します。</span></figcaption></figure>
+        <figcaption><b>⑧ 入金管理</b><span>請求に対する入金の消込。入金済／未入金を切り替えて管理します。</span></figcaption></figure>
 
       <figure><a href="img/pc-payroll.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 給与管理</span></div><img src="img/pc-payroll.png" alt="給与管理" loading="lazy"></div></a>
-        <figcaption><b>⑥ 給与管理</b><span>隊員別の支給額一覧。深夜25%・残業125%の割増と社会保険料を自動計算し、明細をPDF出力します。</span></figcaption></figure>
+        <figcaption><b>⑨ 給与管理</b><span>隊員別の支給額一覧。深夜25%・残業125%の割増と社会保険料を自動計算し、明細をPDF出力します。</span></figcaption></figure>
 
       <figure><a href="img/pc-reports.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 帳票管理</span></div><img src="img/pc-reports.png" alt="帳票管理" loading="lazy"></div></a>
-        <figcaption><b>⑦ 帳票管理</b><span>警備員名簿・配置予定表など、法定備付書類を含む各種帳票の出力メニューです。</span></figcaption></figure>
+        <figcaption><b>⑩ 帳票管理</b><span>警備員名簿・配置予定表など、法定備付書類を含む各種帳票の出力メニューです。</span></figcaption></figure>
 
       <figure><a href="img/pc-master.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / マスタ管理</span></div><img src="img/pc-master.png" alt="マスタ管理" loading="lazy"></div></a>
-        <figcaption><b>⑧ マスタ管理</b><span>隊員マスタと現場マスタ。保有資格、配置NG理由、単価、必要人数などを保持します。</span></figcaption></figure>
+        <figcaption><b>⑪ マスタ管理</b><span>隊員マスタと現場マスタ。保有資格、配置NG理由、単価、必要人数などを保持します。</span></figcaption></figure>
 
       <figure><a href="img/pc-leave.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 有休管理</span></div><img src="img/pc-leave.png" alt="有休管理" loading="lazy"></div></a>
-        <figcaption><b>⑨ 有休管理</b><span>隊員アプリから届いた休暇申請を、承認／交渉可／棄却で処理。結果は即座にアプリへ反映されます。</span></figcaption></figure>
+        <figcaption><b>⑫ 有休管理</b><span>隊員アプリから届いた休暇申請を、承認／交渉可／棄却で処理。結果は即座にアプリへ反映されます。</span></figcaption></figure>
 
       <figure><a href="img/pc-edu.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 教育管理</span></div><img src="img/pc-edu.png" alt="教育管理" loading="lazy"></div></a>
-        <figcaption><b>⑩ 教育管理</b><span>警備業法が定める新任20時間・現任10時間の受講進捗をバーで可視化。未達者を年度末前に検知します。</span><span class="pill">法令対応</span></figcaption></figure>
+        <figcaption><b>⑬ 教育管理</b><span>警備業法が定める新任20時間・現任10時間の受講進捗をバーで可視化。未達者を年度末前に検知します。</span><span class="pill">法令対応</span></figcaption></figure>
 
       <figure><a href="img/pc-finance.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 収支分析</span></div><img src="img/pc-finance.png" alt="収支分析（経営モード）" loading="lazy"></div></a>
-        <figcaption><b>⑪ 収支分析（経営モード）</b><span>現場ごとの請求・人件費・粗利・粗利率。低粗利の現場を色で警告します。配置を変更すると即時に再計算されます。</span></figcaption></figure>
+        <figcaption><b>⑭ 収支分析（経営モード）</b><span>現場ごとの請求・人件費・粗利・粗利率。低粗利の現場を色で警告します。配置を変更すると即時に再計算されます。</span></figcaption></figure>
 
       <figure><a href="img/pc-msg.png" target="_blank" rel="noopener"><div class="laptop"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="url">guardflow / 伝言板</span></div><img src="img/pc-msg.png" alt="アプリ用伝言板" loading="lazy"></div></a>
-        <figcaption><b>⑫ アプリ用伝言板</b><span>隊員アプリの「お知らせ」へ配信する画面。送信すると全隊員の端末に即座に届きます。</span></figcaption></figure>
+        <figcaption><b>⑮ アプリ用伝言板</b><span>隊員アプリの「お知らせ」へ配信する画面。送信すると全隊員の端末に即座に届きます。</span></figcaption></figure>
 
     </div>
   </div>
@@ -361,6 +368,8 @@ footer a{color:var(--navy-2)}
         <figcaption><b>請求書</b><span>得意先宛。人数×時間×単価の内訳と消費税、振込先を記載します。</span></figcaption></figure>
       <figure><a href="img/doc-roster.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-roster.png" alt="警備員名簿" loading="lazy"></div></a>
         <figcaption><b>警備員名簿</b><span>警備業法施行規則が定める備付書類のひとつ。立入検査時の提出を想定しています。</span><span class="pill">法令対応</span></figcaption></figure>
+      <figure><a href="img/doc-wage.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-wage.png" alt="勤務実績・賃金計算表" loading="lazy"></div></a>
+        <figcaption><b>勤務実績・賃金計算表</b><span>ガントと同じ計算ロジックで、期間内の実働・深夜・残業・支給額を集計します。</span></figcaption></figure>
       <figure><a href="img/doc-schedule.png" target="_blank" rel="noopener"><div class="paper"><img src="img/doc-schedule.png" alt="配置予定表" loading="lazy"></div></a>
         <figcaption><b>配置予定表</b><span>指定日の現場別配置一覧。現場へ持ち出す紙の指示書として使えます。</span></figcaption></figure>
     </div>
@@ -402,6 +411,11 @@ footer a{color:var(--navy-2)}
             <td><b>どの日を編集中か分からなくなる</b><br><span style="color:var(--text-2);font-size:13px">勤務可否の入力中に対象日を見失う</span></td>
             <td>行・セルごとに<b>日付を常時表示</b>し、申請状態を4色で判別できるようにしました。</td>
             <td>スマホ ⑥⑦</td>
+          </tr>
+          <tr>
+            <td><b>勤務実績から給与を手計算している</b><br><span style="color:var(--text-2);font-size:13px">深夜割増・残業割増・休憩控除を人が計算すると間違える</span></td>
+            <td>ガントの打刻から<b>実働・深夜・残業を自動算出</b>し、深夜25%・残業25%を積み上げて支給額を出します。深夜かつ残業の時間は自動的に150%。<b>打刻の矛盾や労基法34条の休憩不足も検知</b>して警告します。</td>
+            <td>PC ④〜⑥</td>
           </tr>
           <tr>
             <td><b>配置ミスが後から発覚する</b><br><span style="color:var(--text-2);font-size:13px">出入り禁止の現場や、同時に置いてはいけない組み合わせを管制員の記憶に頼っている</span></td>

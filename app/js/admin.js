@@ -1,6 +1,7 @@
 import { state, ui } from './store.js';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, nightMinutes, parseHM, nowMin } from './util.js';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin } from './util.js';
 import { calcPay } from './prints.js';
+import { ganttView, wageOf } from './gantt.js';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -376,11 +377,8 @@ function financeView() {
     const list = shifts.filter(s => s.siteId === st.id);
     const hours = shiftMinutes(st.start, st.end) / 60;
     const bill = list.length * hours * st.bill;
-    const pay = list.reduce((sum, sh) => {
-      const g = guard(sh.guardId);
-      const dur = shiftMinutes(sh.start, sh.end);
-      return sum + g.rate * dur / 60 + g.rate * 0.25 * nightMinutes(sh.start, dur) / 60;
-    }, 0);
+    // 人件費はガント／時給計算表と同じ wageOf() を使う（打刻・休憩・残業割増まで反映）
+    const pay = list.reduce((sum, sh) => sum + wageOf(sh).total, 0);
     const margin = bill - pay;
     const rate = bill ? Math.round(margin / bill * 100) : 0;
     totalBill += bill; totalPay += pay; totalNeed += st.need; totalAssigned += list.length;
@@ -406,7 +404,7 @@ function financeView() {
       <div class="pc-kpi ${totalAssigned < totalNeed ? 'kpi-alert' : ''}"><b>${totalAssigned}/${totalNeed}</b><span>充足</span></div>
     </div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>現場</th><th class="num">請求</th><th class="num">支払（深夜25%込）</th><th class="num">粗利</th><th>粗利率</th></tr></thead>
+      <thead><tr><th>現場</th><th class="num">請求</th><th class="num">支払（実働・割増込）</th><th class="num">粗利</th><th>粗利率</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
@@ -435,6 +433,7 @@ const MENU = [
   ['dash', '🏠', 'ダッシュボード'],
   ['board', '👥', '勤務管理'],
   ['monitor', '📡', '上下番モニター'],
+  ['gantt', '📊', '勤務ガント'],
   ['billing', '📄', '請求管理'],
   ['deposit', '🏦', '入金管理'],
   ['payroll', '💰', '給与管理'],
@@ -445,13 +444,14 @@ const MENU = [
 ];
 const TITLES = {
   dash: 'ダッシュボード', board: '勤務管理（管制ボード）', monitor: '上下番モニター',
+  gantt: '勤務ガント / 時給計算',
   billing: '請求管理', deposit: '入金管理', payroll: '給与管理', reports: '帳票管理',
   master: 'マスタ管理', leave: '有休管理', edu: '教育管理', finance: '収支分析（経営モード）', msg: 'アプリ用伝言板',
 };
 
 export function renderAdmin(el) {
   const views = {
-    dash: dashView, board: boardView, monitor: monitorView, billing: billingView,
+    dash: dashView, board: boardView, monitor: monitorView, gantt: ganttView, billing: billingView,
     deposit: depositView, payroll: payrollView, reports: reportsView, master: masterView,
     leave: leaveAdminView, edu: eduView, finance: financeView, msg: msgView,
   };

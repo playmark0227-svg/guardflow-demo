@@ -1,5 +1,6 @@
 import { state } from './store.js';
-import { esc, yen, fmtMD, shiftMinutes } from './util.js';
+import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays } from './util.js';
+import { periodRows, ganttPeriod, visibleGuards } from './gantt.js';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
 export function calcPay(g) {
@@ -62,6 +63,54 @@ export function invoiceHTML(siteId, date) {
     </table>
     <p>お振込先：デモ銀行 本店営業部（普）0000000　カ）ガードフローケイビ</p>
     <p class="ps-foot">本請求書はデモデータにより自動生成されています。</p>
+  </div>`;
+}
+
+// ---- 勤務実績・時給計算表（ガントと同じ集計ロジックを使う） ----
+export function wageSheetHTML() {
+  const { byGuard, days } = periodRows();
+  const { from } = ganttPeriod();
+  const period = days > 1 ? `${fmtMD(from)} 〜 ${fmtMD(addDays(from, days - 1))}` : fmtMD(from);
+  let T = { work: 0, night: 0, ot: 0, total: 0 };
+
+  const rows = visibleGuards().filter(g => byGuard.has(g.id)).map(g => {
+    const a = byGuard.get(g.id).reduce((t, { w }) => ({
+      work: t.work + w.workMin, night: t.night + w.nightMin,
+      ot: t.ot + w.otMin, total: t.total + w.total,
+    }), { work: 0, night: 0, ot: 0, total: 0 });
+    Object.keys(T).forEach(k => T[k] += a[k]);
+    const detail = byGuard.get(g.id)
+      .map(({ sh, w }) => `${days > 1 ? fmtMD(sh.date) + ' ' : ''}${fmtAbs(w.s)}–${fmtAbs(w.e)}`).join('、');
+    return `<tr>
+      <td>${esc(g.code)}</td>
+      <td>${esc(g.name)}<br><span style="font-size:10px;color:#666">${esc(detail)}</span></td>
+      <td style="text-align:right">${yen(g.rate)}</td>
+      <td style="text-align:right">${hrs(a.work)}</td>
+      <td style="text-align:right">${a.night ? hrs(a.night) : '—'}</td>
+      <td style="text-align:right">${a.ot ? hrs(a.ot) : '—'}</td>
+      <td style="text-align:right">${yen(a.total)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="payslip">
+    <h1>勤務実績・賃金計算表</h1>
+    <p class="ps-meta">対象期間：${period}　／　GuardFlow警備株式会社（デモ）</p>
+    <table class="ps-table">
+      <tr><th>コード</th><th>氏名 / 勤務時間帯</th><th style="text-align:right">時給</th>
+        <th style="text-align:right">実働(h)</th><th style="text-align:right">深夜(h)</th>
+        <th style="text-align:right">残業(h)</th><th style="text-align:right">支給額</th></tr>
+      ${rows || '<tr><td colspan="7">対象データなし</td></tr>'}
+      <tr class="ps-net">
+        <td colspan="3"><b>合計</b></td>
+        <td style="text-align:right"><b>${hrs(T.work)}</b></td>
+        <td style="text-align:right"><b>${hrs(T.night)}</b></td>
+        <td style="text-align:right"><b>${hrs(T.ot)}</b></td>
+        <td style="text-align:right"><b>${yen(T.total)}</b></td>
+      </tr>
+    </table>
+    <p class="ps-foot">実働＝下番−上番−休憩。深夜（22:00〜翌5:00）に25%、1日8時間超に25%を加算。
+      打刻が無い勤務は予定時刻で計算しています。週40時間超・法定休日の割増は未計算です。</p>
   </div>`;
 }
 

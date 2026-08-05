@@ -15,6 +15,9 @@ export const ui = {
   report: { type: 'depart', shiftId: null },
   shiftDetail: null,
   leaveEdit: false,
+  ganttUnit: 'day14',        // day14 | day7 | hour
+  ganttOffice: '',           // '' = 全拠点
+  ganttSite: '',             // '' = 全現場
 };
 
 export let state = load();

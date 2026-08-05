@@ -4,8 +4,8 @@ import {
 } from './store.js';
 import { renderGuard } from './guard.js';
 import { renderAdmin } from './admin.js';
-import { payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML } from './prints.js';
-import { addDays, todayKey } from './util.js';
+import { payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML } from './prints.js';
+import { addDays, todayKey, addMonths } from './util.js';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -101,6 +101,13 @@ document.addEventListener('click', async e => {
   else if (a === 'reset') { resetDemo(); toast('デモデータをリセットしました'); }
   else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; rerender(); }
   else if (a === 'atab') { ui.adminTab = t.dataset.tab; rerender(); }
+  else if (a === 'gantt-nav') {
+    const dir = Number(t.dataset.dir);
+    if (dir === 0) ui.boardDate = todayKey();
+    else if (ui.ganttUnit === 'month') ui.boardDate = addMonths(ui.boardDate, dir);
+    else ui.boardDate = addDays(ui.boardDate, dir * (ui.ganttUnit === 'hour' ? 1 : 7));
+    rerender();
+  }
   else if (a === 'board-date') {
     const d = Number(t.dataset.delta);
     ui.boardDate = d === 0 ? todayKey() : addDays(ui.boardDate, d);
@@ -153,6 +160,7 @@ document.addEventListener('click', async e => {
     const r = t.dataset.report;
     if (r === 'roster') printHTML(rosterHTML());
     else if (r === 'schedule') printHTML(scheduleHTML(ui.boardDate));
+    else if (r === 'wage') printHTML(wageSheetHTML());
     else if (r === 'invoice-menu') { ui.adminTab = 'billing'; rerender(); }
     else toast('この帳票はデモでは未実装です', 'warn');
   }
@@ -171,7 +179,12 @@ document.addEventListener('submit', e => {
 });
 
 document.addEventListener('change', e => {
-  if (e.target.id === 'guard-switch') { ui.guardId = e.target.value; ui.shiftDetail = null; rerender(); }
+  // 勤務ガントのフィルタ行
+  if (e.target.id === 'gantt-from') { if (e.target.value) { ui.boardDate = e.target.value; rerender(); } }
+  else if (e.target.id === 'gantt-unit') { ui.ganttUnit = e.target.value; rerender(); }
+  else if (e.target.id === 'gantt-office') { ui.ganttOffice = e.target.value; rerender(); }
+  else if (e.target.id === 'gantt-site') { ui.ganttSite = e.target.value; rerender(); }
+  else if (e.target.id === 'guard-switch') { ui.guardId = e.target.value; ui.shiftDetail = null; rerender(); }
   else if (e.target.id === 'offline-switch') {
     toggleOffline();
     toast(state.offline ? '📡 圏外モードに切り替えました' : '✓ 通信回復。送信待ちの報告を同期しました');
