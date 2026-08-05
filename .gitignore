@@ -12,3 +12,6 @@ Thumbs.db
 .idea/
 .vscode/
 node_modules/
+
+# 配布用ZIP（リポジトリには含めない）
+*.zip
