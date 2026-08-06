@@ -12,12 +12,16 @@ export const ui = {
   guardId: 'g1',
   boardDate: todayKey(),
   selectedGuard: null,
-  report: { type: 'depart', shiftId: null },
+  report: { type: 'depart', shiftId: null, manual: false },
+  reportMore: false,
+  payMonth: null,            // 給与明細で見ている月（null=最新）
   shiftDetail: null,
   leaveEdit: false,
   ganttUnit: 'day14',        // day14 | day7 | hour
   ganttOffice: '',           // '' = 全拠点
   ganttSite: '',             // '' = 全現場
+  q: '',                     // 隊員の絞り込み（名前・コード・資格）
+  detailShift: null,         // 詳細シートで開いている勤務
 };
 
 export let state = load();

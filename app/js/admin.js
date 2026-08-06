@@ -1,5 +1,5 @@
 import { state, ui } from './store.js';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin } from './util.js';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js';
 import { calcPay } from './prints.js';
 import { ganttView, wageOf } from './gantt.js';
 
@@ -267,7 +267,7 @@ function payrollView() {
     const p = calcPay(g);
     return `<tr>
       <td>${esc(g.code)}</td><td><b>${esc(g.name)}</b></td>
-      <td class="num">${g.june.days}日 / ${g.june.hours}h</td>
+      <td class="num">${p.days}日 / ${hrs(p.hours * 60)}h</td>
       <td class="num">${yen(p.gross)}</td>
       <td class="num">${yen(p.ded)}</td>
       <td class="num"><b>${yen(p.net)}</b></td>

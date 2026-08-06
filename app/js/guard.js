@@ -31,12 +31,54 @@ function appBar(title, opts = {}) {
   </div>`;
 }
 
+// 打刻の進み具合。次に押すべき報告はここで一意に決まる
+const LABEL = Object.fromEntries(REPORT_TYPES.map(([t, l, i]) => [t, { l, i }]));
+const SHORT = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' };
+
+export function progressOf(sh) {
+  const done = t => sh.punches.some(p => p.type === t);
+  const brk = sh.punches.filter(p => p.type === 'break_s' || p.type === 'break_e');
+  const onBreak = brk.length % 2 === 1;
+  let next = null;
+  if (!done('depart')) next = 'depart';
+  else if (!done('on')) next = 'on';
+  else if (onBreak) next = 'break_e';
+  else if (!done('off')) next = 'off';
+  return { next, onBreak, depart: done('depart'), on: done('on'), off: done('off') };
+}
+
+// 直近で報告すべきシフト（未完了のものを優先し、無ければ最初の1件）
+function activeShift(shifts) {
+  return shifts.find(sh => progressOf(sh).next) || shifts[0] || null;
+}
+
+function stepBar(sh) {
+  const pr = progressOf(sh);
+  const at = t => { const p = sh.punches.find(x => x.type === t); return p ? fmtTime(p.at) : ''; };
+  return `<div class="rep-steps">
+    ${['depart', 'on', 'off'].map((t, i) => {
+      const ok = pr[t];
+      return `${i ? '<span class="rep-arrow">›</span>' : ''}
+      <span class="rep-step ${ok ? 'ok' : pr.next === t ? 'now' : ''}">
+        <b>${ok ? '✓' : i + 1}</b>${SHORT[t]}<i>${ok ? at(t) : '—'}</i>
+      </span>`;
+    }).join('')}
+  </div>`;
+}
+
 // ---- 勤怠報告 ----
 function reportView(g) {
   const shifts = myShifts(g);
   if (!ui.report.shiftId || !shifts.some(s => s.id === ui.report.shiftId)) {
-    ui.report.shiftId = shifts[0] ? shifts[0].id : null;
+    const a = activeShift(shifts);
+    ui.report.shiftId = a ? a.id : null;
   }
+  const cur = shifts.find(s => s.id === ui.report.shiftId);
+  const pr = cur ? progressOf(cur) : { next: null };
+
+  // 次にやる報告を既定にする（利用者が種別を選ばなくてよいようにする）
+  if (!ui.report.manual && pr.next) ui.report.type = pr.next;
+
   const now = new Date();
   const rows = REPORT_TYPES.map(([type, label, ic]) => {
     const sel = ui.report.type === type;
@@ -50,24 +92,51 @@ function reportView(g) {
     const sel = ui.report.shiftId === sh.id;
     const pre = parseHM(sh.start) < 360;
     return `<button class="rep-shift ${sel ? 'sel' : ''}" data-action="rep-shift" data-shift="${sh.id}">
-      <span class="rep-shift-date"><b>${sh.date.replace(/-/g, '/')}</b><br><span class="rep-shift-time">${sh.start}:00 -<br>${sh.end}:00</span></span>
+      <span class="rep-shift-date"><b>${sh.date.replace(/-/g, '/')}</b><br><span class="rep-shift-time">${sh.start}〜${sh.end}</span></span>
       <span class="rep-shift-name">${esc(s.name)}${pre ? '<br><span class="rep-pre">🌙 日跨ぎ夜勤・前夜出発可</span>' : ''}</span>
       <span class="rep-radio">${sel ? '✓' : ''}</span>
     </button>`;
   }).join('') || '<div class="g-empty">対象シフトがありません</div>';
   const qn = queuedCount();
+  const st = cur ? site(cur.siteId) : null;
+  const pre = cur && parseHM(cur.start) < 360;
+
+  // 主役は「次にやる報告」。1タップで完了できるようにする
+  const hero = !cur ? '<div class="g-empty">直近の勤務予定はありません</div>' : `
+    <div class="rep-hero">
+      <div class="rep-hero-site">
+        <span class="rep-hero-kind">${st.kind}</span><b>${esc(st.name)}</b>
+        ${pre ? '<span class="rep-pre">🌙 前夜出発可</span>' : ''}
+      </div>
+      <div class="rep-hero-meta">${fmtMD(cur.date)}　${cur.start}〜${cur.end}　${esc(st.addr)}</div>
+      ${stepBar(cur)}
+      ${pr.next
+        ? `<button class="rep-go" data-action="quick-report" data-type="${pr.next}">
+             <span class="rep-go-ic">${LABEL[pr.next].i}</span>
+             <span class="rep-go-t">${SHORT[pr.next]}を報告</span>
+             <span class="rep-go-s">タップで送信・GPS添付</span>
+           </button>
+           ${pr.next === 'off' && !pr.onBreak ? `<button class="rep-sub" data-action="quick-report" data-type="break_s">☕ 休憩を開始する</button>` : ''}`
+        : '<div class="rep-fin">✓ この勤務の報告はすべて完了しました</div>'}
+    </div>`;
+
   return `
     ${appBar('勤怠報告')}
     ${state.offline ? `<div class="g-offline">📡 圏外です。報告は端末に保存し、通信回復時に自動送信します${qn ? `（送信待ち ${qn}件）` : ''}</div>` : qn ? `<div class="g-synced">✓ 通信回復。送信待ちの報告を同期しました</div>` : ''}
-    <div class="rep-list">${rows}</div>
-    <div class="g-sec">報告時間</div>
-    <div class="rep-time">🕐 ${pad(now.getHours())}:${pad(now.getMinutes())}</div>
-    <div class="g-sec">報告対象シフト</div>
-    <div class="rep-shifts">${shiftRows}</div>
-    <div class="g-sec">連絡事項</div>
-    <textarea class="rep-memo" id="rep-memo" placeholder="連絡事項を記入します。"></textarea>
-    <button class="g-btn-red" data-action="submit-report">報告する</button>
-    <div class="g-note">報告にはGPS位置情報が自動で添付されます</div>`;
+    ${hero}
+    <button class="rep-more" data-action="rep-more">${ui.reportMore ? '▲ 閉じる' : '▼ ほかの報告をする・時刻や連絡事項を変える'}</button>
+    <div class="rep-detail" ${ui.reportMore ? '' : 'hidden'}>
+      <div class="g-sec">報告の種類</div>
+      <div class="rep-list">${rows}</div>
+      <div class="g-sec">報告時間</div>
+      <div class="rep-time">🕐 ${pad(now.getHours())}:${pad(now.getMinutes())}</div>
+      <div class="g-sec">報告対象シフト</div>
+      <div class="rep-shifts">${shiftRows}</div>
+      <div class="g-sec">連絡事項</div>
+      <textarea class="rep-memo" id="rep-memo" placeholder="連絡事項を記入します。"></textarea>
+      <button class="g-btn-red" data-action="submit-report">この内容で報告する</button>
+      <div class="g-note">報告にはGPS位置情報が自動で添付されます</div>
+    </div>`;
 }
 
 // ---- シフト管理 ----
@@ -82,7 +151,7 @@ function shiftListView(g) {
       const s = site(sh.siteId);
       rows.push(`<button class="sh-row" data-action="shift-open" data-shift="${sh.id}">
         <span class="sh-date"><b>${fmtMD(d)}</b>${i === 0 ? '<span class="sh-today">今日</span>' : ''}</span>
-        <span class="sh-body">${esc(s.name)}<br><span class="sh-time">${sh.start}:00 - ${sh.end}:00</span></span>
+        <span class="sh-body">${esc(s.name)}<br><span class="sh-time">${sh.start}〜${sh.end}</span></span>
         <span class="sh-chev">›</span>
       </button>`);
     });
@@ -121,8 +190,8 @@ function shiftDetailView(g) {
     <a class="g-btn-navy" href="https://www.google.com/maps/search/コンビニ+near+${q}" target="_blank" rel="noopener">勤務先付近のコンビニを検索</a>
     <div class="g-sec">勤務時間帯</div>
     <div class="dt-times">
-      <span class="dt-time">⏱ 上番　${sh.start}:00</span>
-      <span class="dt-time">⏱ 下番　${sh.end}:00</span>
+      <span class="dt-time">⏱ 上番　${sh.start}</span>
+      <span class="dt-time">⏱ 下番　${sh.end}</span>
     </div>`;
 }
 
@@ -152,7 +221,7 @@ function leaveView(g) {
       　${y}年 ${m + 1}月
       <button class="cal-nav" data-action="cal-month" data-delta="1">▶</button>
     </div>
-    ${ui.leaveEdit ? '<div class="g-offline">日付をタップして休暇を申請（申請済をタップで取消）</div>' : ''}
+    <div class="g-hint">📅 希望日をタップすると休暇を申請できます（申請済をもう一度タップで取消）</div>
     <table class="cal">
       <tr>${WD.map(w => `<th>${w}</th>`).join('')}</tr>
       ${cells}
@@ -167,11 +236,17 @@ function leaveView(g) {
 
 // ---- 給与管理 ----
 function payView(g) {
-  const p = calcPay(g);
+  const p = calcPay(g, ui.payMonth);
+  const i = p.months.indexOf(p.month);
+  const ym = m => `${m.slice(0, 4)}年${Number(m.slice(5))}月度`;
   const row = (k, v, cls = '') => `<div class="pay-tr ${cls}"><span class="pay-th">${k}</span><span class="pay-td">${v}</span></div>`;
   return `
     ${appBar('給与管理')}
-    <div class="pay-pager">◀　2026年6月度 給与明細書　▶</div>
+    <div class="pay-pager">
+      <button class="pay-nav" data-action="pay-month" data-m="${p.months[i - 1] || ''}" ${i > 0 ? '' : 'disabled'}>◀</button>
+      <span>${ym(p.month)} 給与明細書</span>
+      <button class="pay-nav" data-action="pay-month" data-m="${p.months[i + 1] || ''}" ${i < p.months.length - 1 ? '' : 'disabled'}>▶</button>
+    </div>
     <div class="pay-table">
       <div class="pay-tr pay-head"><span class="pay-th th-navy">隊員コード</span><span class="pay-td th-navy2">氏名</span></div>
       <div class="pay-tr"><span class="pay-th" style="text-align:center">${esc(g.code)}</span><span class="pay-td" style="text-align:center">${esc(g.name)}</span></div>

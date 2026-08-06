@@ -117,8 +117,12 @@ export function ganttPeriod() {
 }
 
 /** 絞り込み後の隊員リスト（拠点フィルタ） */
-export const visibleGuards = () =>
-  state.guards.filter(g => !ui.ganttOffice || g.office === ui.ganttOffice);
+export const visibleGuards = () => {
+  const q = (ui.q || '').trim().toLowerCase();
+  return state.guards.filter(g =>
+    (!ui.ganttOffice || g.office === ui.ganttOffice) &&
+    (!q || [g.name, g.code, g.office, ...(g.quals || [])].join(' ').toLowerCase().includes(q)));
+};
 
 /** 期間内の全シフトを、隊員ごとにまとめて返す */
 export function periodRows() {
@@ -187,7 +191,7 @@ function todayPanel() {
 
   const cards = list.map(({ sh, g, st, w }) => {
     const [label, cls] = STATE[stateOf(w)];
-    return `<div class="tp-card" style="--c:${siteColor(sh.siteId)}" title="${esc(st.addrFull || st.addr)}">
+    return `<div class="tp-card" role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" style="--c:${siteColor(sh.siteId)}" title="${esc(st.addrFull || st.addr)}\nクリックで詳細">
       <div class="tp-top">
         <b class="tp-name">${esc(g.name)}</b>
         <span class="tp-st ${cls}">${label}</span>
@@ -209,6 +213,59 @@ function todayPanel() {
       ${onLeave.map(l => `<span class="tp-chip tp-chip-leave">休暇 ${esc(guard(l.guardId).name)}</span>`).join('')}
       ${free.map(g => `<span class="tp-chip">未配置 ${esc(g.name)}</span>`).join('')}
     </div>` : ''}
+  </div>`;
+}
+
+
+/** 勤務1件の詳細シート。バーやカードを押すと開く */
+export function shiftSheet() {
+  const sh = state.shifts.find(x => x.id === ui.detailShift);
+  if (!sh) return '';
+  const g = guard(sh.guardId), st = site(sh.siteId), w = wageOf(sh);
+  const [label, cls] = STATE[stateOf(w)];
+  const P = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' };
+  const punches = sh.punches.length
+    ? sh.punches.slice().sort((a, b) => new Date(a.at) - new Date(b.at)).map(p => `
+      <div class="sd-punch">
+        <b>${P[p.type] || p.type}</b>
+        <span class="sd-time">${fmtAbs(absMin(p.at, sh.date))}</span>
+        <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">📍 ±${p.acc}m</a>
+        ${p.queued ? '<span class="pc-chip-warn">☁ 送信待ち</span>' : ''}
+      </div>`).join('')
+    : '<div class="pc-muted small">打刻はまだありません（予定で計算しています）</div>';
+
+  const row = (k, v) => `<div class="sd-row"><span>${k}</span><b>${v}</b></div>`;
+  return `
+  <div class="sd-back" data-action="close-shift"></div>
+  <div class="sd" role="dialog" aria-modal="true" aria-label="勤務の詳細">
+    <div class="sd-head" style="--c:${siteColor(sh.siteId)}">
+      <div>
+        <b>${esc(g.name)}</b><span class="st-chip ${cls}">${label}</span>
+        <div class="sd-sub">${esc(g.code)} ／ ${esc(g.office)} ／ ${yen(g.rate)}/h</div>
+      </div>
+      <button class="sd-x" data-action="close-shift" aria-label="閉じる">✕</button>
+    </div>
+    <div class="sd-body">
+      <div class="sd-site">${esc(st.name)}${st.night ? ' 🌙' : ''}</div>
+      <div class="pc-muted small">${fmtMD(sh.date)}　予定 ${sh.start}〜${sh.end}　${esc(st.addrFull || st.addr)}</div>
+      ${w.flags.length ? `<div class="pc-banner-warn" style="margin:10px 0">⚠ ${esc(w.flags.join(' ／ '))}</div>` : ''}
+      ${w.notes.length ? `<div class="pc-muted small" style="margin:8px 0">ℹ ${esc(w.notes.join(' ／ '))}</div>` : ''}
+      <div class="g-sec" style="margin:10px -16px 8px">打刻</div>
+      ${punches}
+      <div class="g-sec" style="margin:12px -16px 8px">賃金</div>
+      ${row('実働', hrs(w.workMin) + ' h')}
+      ${row('休憩', w.breakMin ? w.breakMin + ' 分' : '—')}
+      ${row('深夜（22:00〜翌5:00）', w.nightMin ? hrs(w.nightMin) + ' h' : '—')}
+      ${row('残業（8時間超）', w.otMin ? hrs(w.otMin) + ' h' : '—')}
+      ${row('基本給', yen(w.base))}
+      ${row('深夜25%', w.nightPay ? yen(w.nightPay) : '—')}
+      ${row('残業25%', w.otPay ? yen(w.otPay) : '—')}
+      <div class="sd-row sd-total"><span>支給額</span><b>${yen(w.total)}</b></div>
+    </div>
+    <div class="sd-foot">
+      <button class="pc-btn" data-action="goto-board" data-date="${sh.date}">管制ボードで開く</button>
+      <button class="pc-btn sd-danger" data-action="remove-shift" data-shift="${sh.id}">この配置を外す</button>
+    </div>
   </div>`;
 }
 
@@ -263,7 +320,7 @@ function dayBoardView() {
           + `\n賃金 ${yen(w.total)}`
           + (w.flags.length ? `\n⚠ ${w.flags.join(' / ')}` : '');
         return `<span class="dg-bar ${cls}" style="grid-column:${col}/span ${span};--c:${siteColor(sh.siteId)}"
-          title="${esc(tip)}">${compact ? esc(st.mark || '●') : `${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}`}</span>`;
+          role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" title="${esc(tip)}\nクリックで詳細">${compact ? esc(st.mark || '●') : `${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}`}</span>`;
       }).join('');
 
       const over = sm.maxRun >= 6;
@@ -307,8 +364,8 @@ function dayBoardView() {
 
 export function ganttView() {
   // 日単位（14日/7日）は参照UIと同じ日ボード、時間単位は1日の時間軸ガント
-  if (ganttPeriod().unit !== 'hour') return dayBoardView() + wageTable();
-  return hourGanttView() + wageTable();
+  if (ganttPeriod().unit !== 'hour') return dayBoardView() + wageTable() + shiftSheet();
+  return hourGanttView() + wageTable() + shiftSheet();
 }
 
 /** 1日ぶんの時間軸ガント（予定と実働を上下に重ねて予実比較する） */
@@ -372,10 +429,10 @@ function hourGanttView() {
           + (w.otMin ? ` / 残業 ${hrs(w.otMin)}h` : '')
           + `\n賃金 ${yen(w.total)}`;
         // 予定バー（上段）
-        const plan = `<span class="gt-plan" style="left:${x(offset + w.planS)}%;width:${wpc(w.planE - w.planS)}%;--c:${c}" title="${esc(tip)}"></span>`;
+        const plan = `<span class="gt-plan" role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" style="left:${x(offset + w.planS)}%;width:${wpc(w.planE - w.planS)}%;--c:${c}" title="${esc(tip)}"></span>`;
         // 実働バー（下段）：休憩で分割された区間ごとに描く
         const act = w.source === 'plan' ? '' : w.segs.map(([a, b]) =>
-          `<span class="gt-act" style="left:${x(offset + a)}%;width:${wpc(b - a)}%;background:${c}" title="${esc(tip)}"></span>`).join('');
+          `<span class="gt-act" role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" style="left:${x(offset + a)}%;width:${wpc(b - a)}%;background:${c}" title="${esc(tip)}"></span>`).join('');
         // ラベルは幅に余裕があるときだけ（週表示は潰れるので出さない）
         const label = !week && (w.planE - w.planS) / span > 0.12
           ? `<span class="gt-label" style="left:${x(offset + w.planS)}%">${esc(st.name.slice(0, 12))}</span>` : '';
@@ -429,6 +486,9 @@ function toolbar() {
       <select id="gantt-unit">
         ${Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k === unit ? 'selected' : ''}>${v.label}</option>`).join('')}
       </select>
+    </label>
+    <label>隊員をさがす
+      <input type="search" id="gantt-q" value="${esc(ui.q || '')}" placeholder="名前・コード・資格">
     </label>
     <label>拠点
       <select id="gantt-office">

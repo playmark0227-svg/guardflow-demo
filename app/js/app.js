@@ -114,7 +114,19 @@ document.addEventListener('click', async e => {
     rerender();
   }
   // --- 隊員アプリ：勤怠報告 ---
-  else if (a === 'rep-type') { ui.report.type = t.dataset.type; rerender(); }
+  else if (a === 'rep-type') { ui.report.type = t.dataset.type; ui.report.manual = true; rerender(); }
+  else if (a === 'rep-more') { ui.reportMore = !ui.reportMore; rerender(); }
+  else if (a === 'pay-month') { if (t.dataset.m) { ui.payMonth = t.dataset.m; rerender(); } }
+  else if (a === 'quick-report') {
+    // 次にやる報告を1タップで送信する
+    if (!ui.report.shiftId) { toast('報告対象シフトがありません', 'warn'); return; }
+    t.disabled = true;
+    const geo = await getGeo();
+    punch(ui.report.shiftId, t.dataset.type, geo, '');
+    ui.report.manual = false;
+    const label = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' }[t.dataset.type];
+    toast(state.offline ? `☁ ${label}を端末に保存しました（圏外・通信回復時に自動送信）` : `✓ ${label}を報告しました（GPS添付）`, state.offline ? 'warn' : 'ok');
+  }
   else if (a === 'rep-shift') { ui.report.shiftId = t.dataset.shift; rerender(); }
   else if (a === 'submit-report') {
     if (!ui.report.shiftId) { toast('報告対象シフトがありません', 'warn'); return; }
@@ -122,6 +134,7 @@ document.addEventListener('click', async e => {
     t.disabled = true;
     const geo = await getGeo();
     punch(ui.report.shiftId, ui.report.type, geo, memo);
+    ui.report.manual = false;
     const label = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' }[ui.report.type];
     toast(state.offline ? `☁ ${label}報告を端末に保存しました（圏外・通信回復時に自動送信）` : `✓ ${label}報告を送信しました（GPS添付）`, state.offline ? 'warn' : 'ok');
   }
@@ -131,7 +144,6 @@ document.addEventListener('click', async e => {
   else if (a === 'leave-edit') { ui.leaveEdit = !ui.leaveEdit; rerender(); }
   else if (a === 'cal-month') { ui.calMonth = (ui.calMonth || 0) + Number(t.dataset.delta); rerender(); }
   else if (a === 'leave-day') {
-    if (!ui.leaveEdit) return;
     const date = t.dataset.date;
     if (date < todayKey()) { toast('過去の日付には申請できません', 'warn'); return; }
     const mine = state.leaves.find(l => l.guardId === ui.guardId && l.date === date);
@@ -146,14 +158,17 @@ document.addEventListener('click', async e => {
     if (!ui.selectedGuard) { toast('先に「未配置の隊員」から選択してください', 'warn'); return; }
     tryAssign(ui.selectedGuard, t.dataset.site);
   }
-  else if (a === 'remove-shift') { unassign(t.dataset.shift); toast('配置を解除しました'); }
+  else if (a === 'open-shift') { ui.detailShift = t.dataset.shift; rerender(); }
+  else if (a === 'close-shift') { ui.detailShift = null; rerender(); }
+  else if (a === 'goto-board') { ui.boardDate = t.dataset.date; ui.detailShift = null; ui.adminTab = 'board'; rerender(); }
+  else if (a === 'remove-shift') { ui.detailShift = null; unassign(t.dataset.shift); toast('配置を解除しました'); }
   else if (a === 'leave') {
     setLeave(t.dataset.id, t.dataset.st);
     toast({ approved: '✓ 承認しました（隊員アプリへ反映）', nego: '「交渉可」にしました', rejected: '棄却しました' }[t.dataset.st]);
   }
   else if (a === 'toggle-deposit') { toggleDeposit(t.dataset.site); }
   // --- 帳票・印刷 ---
-  else if (a === 'print-pay') { printHTML(payslipPrintHTML(state.guards.find(x => x.id === ui.guardId))); }
+  else if (a === 'print-pay') { printHTML(payslipPrintHTML(state.guards.find(x => x.id === ui.guardId), ui.payMonth)); }
   else if (a === 'print-payslip') { printHTML(payslipPrintHTML(state.guards.find(x => x.id === t.dataset.guard))); }
   else if (a === 'print-invoice') { printHTML(invoiceHTML(t.dataset.site, ui.boardDate)); }
   else if (a === 'report-out') {
@@ -178,6 +193,16 @@ document.addEventListener('submit', e => {
   }
 });
 
+// 検索は打つそばから絞り込む（フォーカスとカーソル位置は維持する）
+document.addEventListener('input', e => {
+  if (e.target.id !== 'gantt-q') return;
+  ui.q = e.target.value;
+  const pos = e.target.selectionStart;
+  rerender();
+  const el = document.getElementById('gantt-q');
+  if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+});
+
 document.addEventListener('change', e => {
   // 勤務ガントのフィルタ行
   if (e.target.id === 'gantt-from') { if (e.target.value) { ui.boardDate = e.target.value; rerender(); } }
@@ -188,6 +213,14 @@ document.addEventListener('change', e => {
   else if (e.target.id === 'offline-switch') {
     toggleOffline();
     toast(state.offline ? '📡 圏外モードに切り替えました' : '✓ 通信回復。送信待ちの報告を同期しました');
+  }
+});
+
+// キーボード操作：Enter/Space で開く、Esc で閉じる
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && ui.detailShift) { ui.detailShift = null; rerender(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.action === 'open-shift') {
+    e.preventDefault(); ui.detailShift = e.target.dataset.shift; rerender();
   }
 });
 

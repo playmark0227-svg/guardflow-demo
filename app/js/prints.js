@@ -1,35 +1,48 @@
 import { state } from './store.js';
 import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays } from './util.js';
-import { periodRows, ganttPeriod, visibleGuards } from './gantt.js';
+import { periodRows, ganttPeriod, visibleGuards, wageOf } from './gantt.js';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
-export function calcPay(g) {
-  const j = g.june;
-  const base = j.hours * g.rate;
-  const night = Math.round(j.night * g.rate * 0.25);
-  const ot = Math.round(j.ot * g.rate * 1.25);
-  const transport = 8000;
+// 実際の勤務データ（打刻）から、指定月の給与を組み立てる
+export function payMonths() {
+  return [...new Set(state.shifts.map(s => s.date.slice(0, 7)))].sort();
+}
+
+export function calcPay(g, ym) {
+  const months = payMonths();
+  const month = ym && months.includes(ym) ? ym : months[months.length - 1] || '';
+  const list = state.shifts.filter(s => s.guardId === g.id && s.date.startsWith(month));
+  const a = list.reduce((t, sh) => {
+    const w = wageOf(sh, g);
+    return { work: t.work + w.workMin, night: t.night + w.nightMin, ot: t.ot + w.otMin,
+      base: t.base + w.base, np: t.np + w.nightPay, op: t.op + w.otPay };
+  }, { work: 0, night: 0, ot: 0, base: 0, np: 0, op: 0 });
+
+  const days = new Set(list.map(s => s.date)).size;
+  const base = a.base, night = a.np, ot = a.op;
+  const transport = days * 600;                       // 実費相当（1日600円）
   const gross = base + night + ot + transport;
   const health = Math.round(gross * 0.0495);
   const pension = Math.round(gross * 0.0915);
   const emp = Math.round(gross * 0.0055);
   const tax = Math.round(gross * 0.021);
   const ded = health + pension + emp + tax;
-  return { base, night, ot, transport, gross, health, pension, emp, tax, ded, net: gross - ded };
+  return { month, months, days, hours: a.work / 60, nightH: a.night / 60, otH: a.ot / 60,
+    base, night, ot, transport, gross, health, pension, emp, tax, ded, net: gross - ded };
 }
 
-export function payslipPrintHTML(g) {
-  const p = calcPay(g);
+export function payslipPrintHTML(g, ym) {
+  const p = calcPay(g, ym);
   const tr = (k, v) => `<tr><td>${k}</td><td style="text-align:right">${yen(v)}</td></tr>`;
   return `
   <div class="payslip">
     <h1>給与支給明細書</h1>
-    <p class="ps-meta">2026年6月度　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${p.month.replace('-', '年')}月度　／　GuardFlow警備株式会社（デモ）</p>
     <p class="ps-name">${esc(g.code)}　${esc(g.name)} 殿</p>
     <table class="ps-table">
       <tr><th colspan="2">勤怠</th></tr>
-      <tr><td>出勤日数</td><td style="text-align:right">${g.june.days}日</td></tr>
-      <tr><td>総労働時間</td><td style="text-align:right">${g.june.hours}時間（深夜${g.june.night}h／残業${g.june.ot}h）</td></tr>
+      <tr><td>出勤日数</td><td style="text-align:right">${p.days}日</td></tr>
+      <tr><td>総労働時間</td><td style="text-align:right">${hrs(p.hours * 60)}時間（深夜${hrs(p.nightH * 60)}h／残業${hrs(p.otH * 60)}h）</td></tr>
       <tr><th colspan="2">支給</th></tr>
       ${tr('基本給', p.base)}${tr('深夜手当', p.night)}${tr('時間外手当', p.ot)}${tr('交通費', p.transport)}
       ${tr('総支払額', p.gross)}
