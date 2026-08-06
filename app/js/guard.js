@@ -17,15 +17,18 @@ export const REPORT_TYPES = [
 
 // 隊員の直近シフト（今日・明日）
 function myShifts(g) {
-  const D0 = todayKey(), D1 = addDays(D0, 1);
-  return state.shifts
-    .filter(sh => sh.guardId === g.id && (sh.date === D0 || sh.date === D1))
+  const D0 = todayKey();
+  // 今日・明日を基本にしつつ、休みの日でも空画面にならないよう次の勤務まで拾う
+  const all = state.shifts
+    .filter(sh => sh.guardId === g.id && sh.date >= D0)
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const near = all.filter(sh => sh.date <= addDays(D0, 1));
+  return near.length ? near : all.slice(0, 1);
 }
 
 function appBar(title, opts = {}) {
   return `<div class="g-appbar">
-    ${opts.back ? `<button class="g-back" data-action="shift-back">‹</button>` : ''}
+    ${opts.back ? `<button class="g-back" data-action="${opts.backAction || 'shift-back'}">‹</button>` : ''}
     <span class="g-appbar-title">${esc(title)}</span>
     ${opts.right || ''}
   </div>`;
@@ -195,6 +198,24 @@ function shiftDetailView(g) {
     </div>`;
 }
 
+
+// ---- お知らせ本文 ----
+function noticeDetailView() {
+  const n = state.notices.find(x => x.id === ui.noticeId);
+  if (!n) { ui.noticeId = null; return null; }
+  return `
+    ${appBar('お知らせ', { back: true, backAction: 'notice-back' })}
+    <div class="nt-detail">
+      <div class="nt-detail-head">
+        <span class="nt-badge">${esc(n.cat)}</span>
+        <span class="pc-muted small">${esc(n.at.slice(0, 10))} ${fmtTime(n.at)}</span>
+      </div>
+      <h2 class="nt-title">${esc(n.title)}</h2>
+      <p class="nt-text">${esc(n.body)}</p>
+      <div class="nt-from">${esc(n.from)}</div>
+    </div>`;
+}
+
 // ---- 休暇申請 ----
 const LV_CLS = { pending: 'lv-pending', nego: 'lv-nego', approved: 'lv-approved', rejected: 'lv-rejected' };
 
@@ -215,7 +236,7 @@ function leaveView(g) {
   }
   cells += '</tr>';
   return `
-    ${appBar('休暇申請', { right: `<button class="g-edit ${ui.leaveEdit ? 'on' : ''}" data-action="leave-edit">${ui.leaveEdit ? '完了' : '編集'}</button>` })}
+    ${appBar('休暇申請')}
     <div class="cal-pager">
       <button class="cal-nav" data-action="cal-month" data-delta="-1">◀</button>
       　${y}年 ${m + 1}月
@@ -280,9 +301,9 @@ function noticeView(g) {
   const banner = state.notices[0];
   return `
     ${appBar('お知らせ', { right: '<button class="g-logout" data-action="logout">ログアウト</button>' })}
-    ${banner ? `<div class="nt-banner"><span class="nt-banner-logo">GF</span><div><b>${esc(banner.from)}より</b><br>${esc(banner.title)} — ${esc(banner.body).slice(0, 60)}…</div></div>` : ''}
+    ${banner ? `<button class="nt-banner" data-action="notice-open" data-id="${banner.id}"><span class="nt-banner-logo">GF</span><div><b>${esc(banner.from)}より</b><br>${esc(banner.title)}</div><span class="sh-chev">›</span></button>` : ''}
     <div class="nt-list">
-      ${state.notices.map(n => `<button class="nt-row">
+      ${state.notices.map(n => `<button class="nt-row" data-action="notice-open" data-id="${n.id}">
         <span class="nt-badge">お知らせ</span>
         <span class="nt-body">
           <b>${esc(n.at.slice(0, 10).replace(/-/g, '-'))} ${fmtTime(n.at)}</b><br>
@@ -296,7 +317,8 @@ function noticeView(g) {
 export function renderGuard(el) {
   const g = state.guards.find(x => x.id === ui.guardId);
   let body;
-  if (ui.guardTab === 'shift' && ui.shiftDetail) body = shiftDetailView(g);
+  if (ui.guardTab === 'notice' && ui.noticeId) body = noticeDetailView() || noticeView(g);
+  else if (ui.guardTab === 'shift' && ui.shiftDetail) body = shiftDetailView(g);
   else body = ({ notice: noticeView, report: reportView, shift: shiftListView, leave: leaveView, pay: payView })[ui.guardTab](g);
   const tabs = [
     ['notice', 'ℹ️', 'お知らせ'],

@@ -6,7 +6,7 @@ const listeners = new Set();
 
 // 画面状態（永続化しない）
 export const ui = {
-  role: 'guard',
+  role: 'admin',             // 初見はまず管制ダッシュボードを見せる
   guardTab: 'report',        // notice | report | shift | leave | pay
   adminTab: 'dash',          // dash | board | monitor | billing | deposit | payroll | reports | master | leave | edu | finance | msg
   guardId: 'g1',
@@ -15,6 +15,7 @@ export const ui = {
   report: { type: 'depart', shiftId: null, manual: false },
   reportMore: false,
   payMonth: null,            // 給与明細で見ている月（null=最新）
+  noticeId: null,            // お知らせ本文で開いている記事
   shiftDetail: null,
   leaveEdit: false,
   ganttUnit: 'day14',        // day14 | day7 | hour
@@ -92,9 +93,25 @@ export function assign(date, siteId, guardId) {
   commit();
 }
 
+// 直前に外した配置を1件だけ覚えておき、取り消せるようにする
+let lastRemoved = null;
+
 export function unassign(shiftId) {
+  const sh = state.shifts.find(s => s.id === shiftId);
+  if (!sh) return null;
+  lastRemoved = JSON.parse(JSON.stringify(sh));
   state.shifts = state.shifts.filter(s => s.id !== shiftId);
   commit();
+  return lastRemoved;
+}
+
+export function undoUnassign() {
+  if (!lastRemoved) return null;
+  const sh = lastRemoved;
+  lastRemoved = null;
+  if (!state.shifts.some(s => s.id === sh.id)) state.shifts.push(sh);
+  commit();
+  return sh;
 }
 
 // ---- 連絡・申請 ----

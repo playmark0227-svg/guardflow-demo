@@ -738,3 +738,21 @@ body.pc-mode #app { display: block; }
 .g-appbar { position: sticky; top: 0; z-index: 20; }
 .g-hint { background: #eaf1fb; color: var(--navy); font-size: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
 [data-theme="dark"] .g-hint { background: #1f2b40; color: #9dbdf0; }
+
+/* お知らせ本文 */
+.nt-banner { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.nt-detail { padding: 16px 14px 24px; }
+.nt-detail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.nt-title { font-size: 18px; margin: 0 0 12px; line-height: 1.45; }
+.nt-text { font-size: 15px; line-height: 1.85; margin: 0 0 18px; white-space: pre-wrap; }
+.nt-from { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* トーストの操作ボタン（元に戻す） */
+.toast { display: inline-flex; align-items: center; gap: 12px; }
+.toast-act {
+  background: rgba(255,255,255,.22); color: #fff; font-weight: 800; font-size: 12.5px;
+  border-radius: 4px; padding: 5px 12px; white-space: nowrap;
+}
+.toast-act:hover { background: rgba(255,255,255,.36); }
+/* 配置解除の × を押しやすく */
+.rm { min-width: 30px; min-height: 30px; border-radius: 4px; }

@@ -1,6 +1,6 @@
 import {
   state, ui, subscribe, rerender, resetDemo, punch, toggleOffline,
-  checkAssign, assign, unassign, addNotice, requestLeave, cancelLeave, setLeave, toggleDeposit,
+  checkAssign, assign, unassign, undoUnassign, addNotice, requestLeave, cancelLeave, setLeave, toggleDeposit,
 } from './store.js';
 import { renderGuard } from './guard.js';
 import { renderAdmin } from './admin.js';
@@ -17,11 +17,19 @@ function applyTheme() {
 }
 
 // ---- トースト ----
-function toast(msg, type = 'ok') {
+function toast(msg, type = 'ok', action = null) {
   const wrap = document.getElementById('toast-wrap');
   const div = document.createElement('div');
   div.className = `toast toast-${type}`;
   div.textContent = msg;
+  if (action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-act';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => { action.run(); div.remove(); });
+    div.appendChild(btn);
+    div.style.pointerEvents = 'auto';
+  }
   wrap.appendChild(div);
   setTimeout(() => div.classList.add('show'), 10);
   setTimeout(() => { div.classList.remove('show'); setTimeout(() => div.remove(), 300); }, 3800);
@@ -99,8 +107,10 @@ document.addEventListener('click', async e => {
   if (a === 'role') { ui.role = t.dataset.role; rerender(); }
   else if (a === 'theme') { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; localStorage.setItem('gf-theme', theme); applyTheme(); }
   else if (a === 'reset') { resetDemo(); toast('デモデータをリセットしました'); }
-  else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; rerender(); }
-  else if (a === 'atab') { ui.adminTab = t.dataset.tab; rerender(); }
+  else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; ui.noticeId = null; rerender(); }
+  else if (a === 'notice-open') { ui.noticeId = t.dataset.id; rerender(); }
+  else if (a === 'notice-back') { ui.noticeId = null; rerender(); }
+  else if (a === 'atab') { ui.adminTab = t.dataset.tab; if (t.dataset.date) ui.boardDate = t.dataset.date; rerender(); }
   else if (a === 'gantt-nav') {
     const dir = Number(t.dataset.dir);
     if (dir === 0) ui.boardDate = todayKey();
@@ -141,7 +151,6 @@ document.addEventListener('click', async e => {
   // --- 隊員アプリ：シフト・休暇 ---
   else if (a === 'shift-open') { ui.shiftDetail = t.dataset.shift; rerender(); }
   else if (a === 'shift-back') { ui.shiftDetail = null; rerender(); }
-  else if (a === 'leave-edit') { ui.leaveEdit = !ui.leaveEdit; rerender(); }
   else if (a === 'cal-month') { ui.calMonth = (ui.calMonth || 0) + Number(t.dataset.delta); rerender(); }
   else if (a === 'leave-day') {
     const date = t.dataset.date;
@@ -161,7 +170,15 @@ document.addEventListener('click', async e => {
   else if (a === 'open-shift') { ui.detailShift = t.dataset.shift; rerender(); }
   else if (a === 'close-shift') { ui.detailShift = null; rerender(); }
   else if (a === 'goto-board') { ui.boardDate = t.dataset.date; ui.detailShift = null; ui.adminTab = 'board'; rerender(); }
-  else if (a === 'remove-shift') { ui.detailShift = null; unassign(t.dataset.shift); toast('配置を解除しました'); }
+  else if (a === 'remove-shift') {
+    const sh = state.shifts.find(x => x.id === t.dataset.shift);
+    if (sh && sh.punches.length &&
+        !confirm(`この勤務には打刻が${sh.punches.length}件あります。外すと実績も一緒に消えます。よろしいですか？`)) return;
+    ui.detailShift = null;
+    if (unassign(t.dataset.shift)) {
+      toast('配置を解除しました', 'ok', { label: '元に戻す', run: () => { undoUnassign(); toast('✓ 配置を戻しました'); } });
+    }
+  }
   else if (a === 'leave') {
     setLeave(t.dataset.id, t.dataset.st);
     toast({ approved: '✓ 承認しました（隊員アプリへ反映）', nego: '「交渉可」にしました', rejected: '棄却しました' }[t.dataset.st]);

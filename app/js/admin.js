@@ -32,7 +32,9 @@ function datePager() {
 // ================= ダッシュボード =================
 function dashView() {
   const D0 = todayKey(), D1 = addDays(D0, 1), Dm1 = addDays(D0, -1);
-  const needSum = state.sites.reduce((n, s) => n + s.need, 0);
+  // 明日その現場に1人でも配置予定があるものだけを「稼働現場」として数える
+  const liveSites = new Set(dayShifts(D1).map(s => s.siteId));
+  const needSum = state.sites.filter(s => liveSites.has(s.id)).reduce((n, s) => n + s.need, 0);
   const tomorrowAssigned = dayShifts(D1).length;
   const missing = Math.max(0, needSum - tomorrowAssigned);
   const yShifts = dayShifts(Dm1);
@@ -53,8 +55,8 @@ function dashView() {
   const eduLow = state.education.filter(e => e.done / e.required < 0.6).length;
   const pendingLv = state.leaves.filter(l => l.status === 'pending').length;
   const tasks = [
-    missing ? { ic: '📅', cls: 'tk-orange', label: `明日${fmtMD(D1)}の配置不足（${missing}名）`, link: '勤務予定を入力', tab: 'board' } : null,
-    alerts ? { ic: '🚨', cls: 'tk-red', label: `未出発の隊員（${alerts}件）`, link: '上下番モニターへ', tab: 'monitor' } : null,
+    missing ? { ic: '📅', cls: 'tk-orange', label: `明日${fmtMD(D1)}の配置不足（${missing}名）`, link: '勤務予定を入力', tab: 'board', date: D1 } : null,
+    alerts ? { ic: '🚨', cls: 'tk-red', label: `未出発の隊員（${alerts}件）`, link: '上下番モニターへ', tab: 'monitor', date: D0 } : null,
     eduLow ? { ic: '🎓', cls: 'tk-blue', label: `法定教育の未達（${eduLow}名）`, link: '教育管理へ', tab: 'edu' } : null,
     pendingLv ? { ic: '✈️', cls: 'tk-green', label: `休暇申請の承認待ち（${pendingLv}件）`, link: '有休管理へ', tab: 'leave' } : null,
   ].filter(Boolean);
@@ -67,7 +69,7 @@ function dashView() {
         <div class="pc-card-head"><span>🗓 勤務予定</span><span class="pc-muted">明日 ${fmtMD(D1)}</span></div>
         <div class="pc-card-big">${missing ? `<span class="pc-warn-ic">⚠</span> 入力漏れ <b>${missing}</b> 件` : '<span class="pc-ok-ic">✓</span> 入力漏れなし'}</div>
         <div class="pc-bar-row"><span class="pc-muted">◀ 前日</span>
-          <div class="pc-bar"><div class="pc-bar-fill" style="width:${Math.round(tomorrowAssigned / needSum * 100)}%"></div></div>
+          <div class="pc-bar"><div class="pc-bar-fill" style="width:${needSum ? Math.round(tomorrowAssigned / needSum * 100) : 0}%"></div></div>
           <span class="pc-muted">翌日 ▶</span></div>
         <div class="pc-bar-num">${tomorrowAssigned} / ${needSum}</div>
       </div>
@@ -92,7 +94,7 @@ function dashView() {
     <div class="pc-sec-head"><h2>タスク管理</h2></div>
     <div class="pc-card pc-card-flat">
       <div class="pc-task-head">≡ 優先タスク（全${tasks.length}件）<span style="float:right">⌃</span></div>
-      ${tasks.map(t => `<button class="pc-task" data-action="atab" data-tab="${t.tab}">
+      ${tasks.map(t => `<button class="pc-task" data-action="atab" data-tab="${t.tab}"${t.date ? ` data-date="${t.date}"` : ''}>
         <span class="tk-ic ${t.cls}">${t.ic}</span>
         <span class="tk-label">${t.label}</span>
         <span class="tk-link">${t.link} ›</span>
