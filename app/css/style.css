@@ -810,3 +810,23 @@ th.ded, td.ded { background: color-mix(in srgb, var(--red) 6%, transparent); }
 .blk-form label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .blk-form input, .blk-form select { border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font: inherit; font-size: 13px; background: var(--card); color: var(--text); }
 .zg-pre { font-family: ui-monospace, monospace; font-size: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 10px; overflow-x: auto; margin: 0; }
+
+/* 帳票タイルの出力画面 */
+.rp-card { display: flex; align-items: center; gap: 16px; padding: 20px 22px; }
+.rp-ic { font-size: 34px; line-height: 1; }
+.rp-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rp-body b { font-size: 16px; }
+.lg-paid td { background: color-mix(in srgb, var(--green) 10%, transparent); }
+
+/* 打刻の修正履歴 */
+.sd-manual { color: var(--orange); font-size: 11.5px; font-weight: 700; }
+.sd-audit { display: flex; flex-direction: column; gap: 1px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.sd-audit b { font-size: 13px; }
+.row-alert td { background: color-mix(in srgb, var(--orange) 8%, transparent); }
+.kpi-alert b { color: var(--orange); }
+
+/* 操作担当者と権限 */
+.pc-staff { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px 2px; font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.pc-staff select { font: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--text); }
+.pc-authnote { padding: 2px 10px 6px; font-size: 11px; color: var(--orange); font-weight: 700; }
+.wx-pick select { font: inherit; font-size: 11.5px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--text); }

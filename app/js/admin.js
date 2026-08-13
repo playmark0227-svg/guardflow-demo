@@ -1,7 +1,7 @@
-import { state, ui } from './store.js';
+import { state, ui, canSee, currentAuth, currentStaff } from './store.js';
 import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js';
 import { calcPay } from './prints.js';
-import { ganttView, wageOf } from './gantt.js';
+import { ganttView, wageOf, billOf, needOf, billRateOf, clientTotals } from './gantt.js';
 import { GROUPS, PINNED, findItem, findGroup } from './menu.js';
 import { MASTERS } from './masters.js';
 import {
@@ -40,7 +40,7 @@ function dashView() {
   const D0 = todayKey(), D1 = addDays(D0, 1), Dm1 = addDays(D0, -1);
   // 明日その現場に1人でも配置予定があるものだけを「稼働現場」として数える
   const liveSites = new Set(dayShifts(D1).map(s => s.siteId));
-  const needSum = state.sites.filter(s => liveSites.has(s.id)).reduce((n, s) => n + s.need, 0);
+  const needSum = state.sites.filter(s => liveSites.has(s.id)).reduce((n, s) => n + needOf(s, D1), 0);
   const tomorrowAssigned = dayShifts(D1).length;
   const missing = Math.max(0, needSum - tomorrowAssigned);
   const yShifts = dayShifts(Dm1);
@@ -145,17 +145,27 @@ function boardView() {
 
   const cards = state.sites.map(st => {
     const list = shifts.filter(s => s.siteId === st.id);
-    const short = list.length < st.need;
+    const need = needOf(st, date);
+    const short = list.length < need;
     const qualOK = !st.reqQual || list.some(s => guard(s.guardId).quals.includes(st.reqQual));
     return `<div class="site-card ${short ? 'site-short' : ''}" data-drop-site="${st.id}">
       <div class="site-head">
         <div><span class="pc-chip-kind">${st.kind}</span> <b>${esc(st.name)}</b></div>
-        <span class="${short ? 'staff-short' : 'staff-ok'}">${list.length}/${st.need}名${short ? ' ⚠ 不足' : ' ✓'}</span>
+        <span class="${short ? 'staff-short' : 'staff-ok'}">${list.length}/${need}名${short ? ' ⚠ 不足' : ' ✓'}</span>
       </div>
       <div class="site-meta">
         <span>${st.start}〜${st.end}</span>${st.night ? '<span>🌙</span>' : ''}
         ${st.note ? `<span class="pc-muted">${esc(st.note)}</span>` : ''}
         ${st.reqQual ? `<span class="${qualOK ? 'pc-chip-ok' : 'pc-chip-warn'}">要 ${esc(st.reqQual)} ${qualOK ? '✓' : '⚠ 未充足'}</span>` : ''}
+        <label class="wx-pick" title="警備業務日誌に記録する天候">
+          <select data-action-change="set-weather" data-site="${st.id}" data-date="${date}">
+            <option value="">天候</option>
+            ${(state.masters.weather || []).map(w => {
+              const cur = (state.weatherLog[date] || {})[st.id];
+              return `<option value="${esc(w.name)}" ${cur === w.name ? 'selected' : ''}>${w.mark || ''} ${esc(w.name)}</option>`;
+            }).join('')}
+          </select>
+        </label>
       </div>
       <div>
         ${list.map(sh => {
@@ -226,47 +236,79 @@ function monitorView() {
 // ================= 請求管理 =================
 function billingView() {
   const date = ui.boardDate;
+  let T = { work: 0, extra: 0, tax: 0, total: 0 };
   const rows = state.sites.map(st => {
-    const list = dayShifts(date).filter(s => s.siteId === st.id);
-    const hours = shiftMinutes(st.start, st.end) / 60;
-    const amount = list.length * hours * st.bill;
+    const b = billOf(st, date);
+    T.work += b.work; T.extra += b.extra; T.tax += b.tax; T.total += b.total;
     return `<tr>
       <td><b>${esc(st.name)}</b><br><span class="pc-muted small">${esc(st.client)}</span></td>
-      <td class="num">${list.length}名 × ${hours}h × @${st.bill.toLocaleString()}</td>
-      <td class="num"><b>${yen(amount)}</b></td>
-      <td>${amount ? `<button class="pc-btn" data-action="print-invoice" data-site="${st.id}">📄 請求書</button>` : '<span class="pc-muted">—</span>'}</td>
+      <td class="num">${b.n}名 × ${b.hours}h × @${b.rate.toLocaleString()}</td>
+      <td class="num">${yen(b.work)}</td>
+      <td class="num">${b.extra ? yen(b.extra) : '—'}</td>
+      <td class="num">${yen(b.tax)}</td>
+      <td class="num"><b>${yen(b.total)}</b></td>
+      <td>${b.n ? `<button class="pc-btn" data-action="print-invoice" data-site="${st.id}">📄 請求書</button>` : '<span class="pc-muted">—</span>'}</td>
     </tr>`;
   }).join('');
+  // 得意先単位の集計（課税単位はオプションに従う）
+  const ct = clientTotals(date);
+  let C = { sub: 0, tax: 0, total: 0 };
+  ct.forEach(v => { C.sub += v.sub; C.tax += v.tax; C.total += v.total; });
+  const clientRows = [...ct.entries()].map(([k, v]) => `<tr>
+    <td><b>${esc(k)}</b><span class="pc-muted small">（${v.sites}現場）</span></td>
+    <td class="num">${yen(v.sub)}</td><td class="num">${yen(v.tax)}</td>
+    <td class="num"><b>${yen(v.total)}</b></td></tr>`).join('');
+
   return `${datePager()}
+    <div class="pc-kpi-row">
+      <div class="pc-kpi"><b>${yen(T.work)}</b><span>警備料金</span></div>
+      <div class="pc-kpi"><b>${yen(T.extra)}</b><span>加算・値引</span></div>
+      <div class="pc-kpi"><b>${yen(C.tax)}</b><span>消費税</span></div>
+      <div class="pc-kpi"><b>${yen(C.total)}</b><span>請求合計</span></div>
+    </div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>現場 / 得意先</th><th class="num">明細</th><th class="num">請求額（税抜）</th><th>帳票</th></tr></thead>
+      <thead><tr><th>現場 / 得意先</th><th class="num">明細</th><th class="num">警備料金</th>
+        <th class="num">加算・値引</th><th class="num">消費税</th><th class="num">請求額（税込）</th><th>帳票</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <p class="pc-muted">「請求書」でPDF印刷プレビューを出力します（消費税10%を自動計算）。</p>`;
+    <div class="pc-sec-head" style="margin-top:18px"><h2 style="font-size:15px;margin:0">得意先別 請求集計</h2></div>
+    <div class="pc-card pc-table-wrap"><table class="pc-table">
+      <thead><tr><th>得意先</th><th class="num">請求額（税抜）</th><th class="num">消費税</th><th class="num">請求額（税込）</th></tr></thead>
+      <tbody>${clientRows || '<tr><td colspan="4" class="pc-muted">対象データがありません</td></tr>'}</tbody>
+    </table></div>
+    <p class="pc-muted small">単価は<b>配置先単価マスタ</b>、加算・値引は<b>請求項目マスタ</b>から引いています。
+      消費税の課税単位は オプション設定「得意先合計に消費税を掛ける」に従います
+      （現在：<b>${state.options.taxIn ? 'ON＝得意先の合計に1回課税' : 'OFF＝現場ごとに課税して合算'}</b>）。</p>`;
 }
 
 // ================= 入金管理 =================
 function depositView() {
-  const date = todayKey();
-  const rows = state.sites.map(st => {
-    const list = dayShifts(date).filter(s => s.siteId === st.id);
-    const hours = shiftMinutes(st.start, st.end) / 60;
-    const amount = Math.round(list.length * hours * st.bill * 1.1);
-    const paid = !!state.deposits[st.id];
-    return `<tr>
-      <td><b>${esc(st.client)}</b><br><span class="pc-muted small">${esc(st.name)}</span></td>
-      <td class="num">${yen(amount)}</td>
-      <td>月末</td>
+  const date = ui.boardDate;
+  const ct = clientTotals(date);
+  let T = { bill: 0, paid: 0, rest: 0 };
+  const rows = [...ct.entries()].map(([client, v]) => {
+    const paid = !!state.deposits[client];
+    T.bill += v.total; if (paid) T.paid += v.total; else T.rest += v.total;
+    const sites = state.sites.filter(s => s.client === client).map(s => s.name).join('、');
+    return `<tr class="${paid ? '' : 'row-alert'}">
+      <td><b>${esc(client)}</b><br><span class="pc-muted small">${esc(sites)}</span></td>
+      <td class="num">${yen(v.total)}</td>
+      <td>月末締め翌月末</td>
       <td><span class="st-chip ${paid ? 'st-onduty' : 'st-scheduled'}">${paid ? '入金済' : '未入金'}</span></td>
-      <td><button class="pc-btn" data-action="toggle-deposit" data-site="${st.id}">${paid ? '消込を取消' : '入金消込'}</button></td>
+      <td><button class="pc-btn" data-action="toggle-deposit" data-site="${esc(client)}">${paid ? '消込を取消' : '入金消込'}</button></td>
     </tr>`;
   }).join('');
-  return `
+  return `${datePager()}
+    <div class="pc-kpi-row">
+      <div class="pc-kpi"><b>${yen(T.bill)}</b><span>請求合計</span></div>
+      <div class="pc-kpi"><b>${yen(T.paid)}</b><span>入金済</span></div>
+      <div class="pc-kpi ${T.rest ? 'kpi-alert' : ''}"><b>${yen(T.rest)}</b><span>未入金</span></div>
+    </div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
       <thead><tr><th>得意先 / 現場</th><th class="num">請求額（税込）</th><th>入金予定</th><th>状態</th><th>操作</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rows || '<tr><td colspan="5" class="pc-muted">この日の請求はありません</td></tr>'}</tbody>
     </table></div>
-    <p class="pc-muted">入金実績・入金予定・入金漏れを判別します（デモ：本日分請求ベース）。</p>`;
+    <p class="pc-muted small">消込は得意先単位で記録し、<b>得意先元帳</b>にそのまま反映されます。</p>`;
 }
 
 // ================= 給与管理（PC） =================
@@ -295,17 +337,18 @@ function reportsView() {
   const items = [
     ['roster', '警備員名簿', '備付書類（規則66条）', true],
     ['schedule', '配置予定表', `対象日：${fmtMD(ui.boardDate)}`, true],
-    ['nippo', '管制日報（B4横）', '', false],
-    ['edu-sheet', '教育実施簿', '', false],
-    ['chingin', '賃金台帳', '', false],
-    ['invoice-menu', '請求書', '請求管理から出力', false],
+    ['nippo', '管制日報', `対象日：${fmtMD(ui.boardDate)}／規則63条`, true],
+    ['edu-sheet', '教育実施簿', '警備業法21条・規則38条', true],
+    ['chingin', '賃金台帳', '労基法108条・3年保存', true],
+    ['contract', '警備契約書', '警備業法19条の書面', true],
+    ['invoice-menu', '請求書', '請求管理から出力', true],
   ];
   return `
     <div class="pc-cards-grid">
       ${items.map(([id, name, sub, ok]) => `<button class="pc-report-card" data-action="report-out" data-report="${id}">
         <span class="pc-report-ic">🖨</span><b>${name}</b>
         <span class="pc-muted small">${sub || '&nbsp;'}</span>
-        <span class="${ok ? 'pc-chip-ok' : 'pc-chip-muted'}">${ok ? 'PDF出力可' : 'デモ未実装'}</span>
+        <span class="${ok ? 'pc-chip-ok' : 'pc-chip-muted'}">${ok ? 'PDF出力可' : '準備中'}</span>
       </button>`).join('')}
     </div>
     <p class="pc-muted">帳票はボタン1つでPDF出力（ブラウザの印刷ダイアログが開きます）。</p>`;
@@ -359,15 +402,15 @@ function financeView() {
   const rows = state.sites.map(st => {
     const list = shifts.filter(s => s.siteId === st.id);
     const hours = shiftMinutes(st.start, st.end) / 60;
-    const bill = list.length * hours * st.bill;
+    const bill = list.length * hours * billRateOf(st);
     // 人件費はガント／時給計算表と同じ wageOf() を使う（打刻・休憩・残業割増まで反映）
     const pay = list.reduce((sum, sh) => sum + wageOf(sh).total, 0);
     const margin = bill - pay;
     const rate = bill ? Math.round(margin / bill * 100) : 0;
-    totalBill += bill; totalPay += pay; totalNeed += st.need; totalAssigned += list.length;
+    totalBill += bill; totalPay += pay; totalNeed += needOf(st, date); totalAssigned += list.length;
     const low = bill > 0 && rate < 30;
     return `<tr>
-      <td><b>${esc(st.name)}</b><br><span class="pc-muted small">${list.length}/${st.need}名 × ${hours}h</span></td>
+      <td><b>${esc(st.name)}</b><br><span class="pc-muted small">${list.length}/${needOf(st, date)}名 × ${hours}h</span></td>
       <td class="num">${yen(bill)}</td>
       <td class="num">${yen(pay)}</td>
       <td class="num"><b>${yen(margin)}</b></td>
@@ -445,6 +488,8 @@ function contentFor() {
   // マスタ編集
   const item = findItem(tab);
   if (item && item.kind === 'master') return masterView(item.master);
+  // 帳票：出力条件を確認してから印刷する画面を出す
+  if (item && item.kind === 'report') return reportItemView(item);
 
   const map = {
     order: orderView,
@@ -459,70 +504,41 @@ function contentFor() {
     'maint-data': () => maintView('data'), 'maint-del': () => maintView('del'), 'maint-zip': () => maintView('zip'),
     'maint-opt': () => maintView('opt'), 'maint-bulk': () => maintView('bulk'), 'maint-io': () => maintView('io'),
     'rep-master': masterPrintView,
-    'm-client': clientMasterView, 'm-site': siteMasterView, 'm-guard': guardMasterView,
   };
   if (map[tab]) return map[tab]();
   return '<div class="pc-muted">画面が見つかりません</div>';
 }
 
+/** 帳票タイルを押したときの画面。対象期間と件数を見せてから出力する */
+function reportItemView(item) {
+  const date = ui.boardDate;
+  const info = {
+    workreport: ['勤務実績表', `${fmtMD(date)} の全配置`, dayShifts(date).length + '件'],
+    'bill-site': ['作業所別 請求一覧', `${fmtMD(date)} 締め`, state.sites.length + '現場'],
+    'bill-client': ['得意先別 請求一覧', `${fmtMD(date)} 締め`, new Set(state.sites.map(s => s.client)).size + '得意先'],
+    'deposit-list': ['入金一覧表', '本日時点', state.sites.length + '現場'],
+    paylist: ['給与一覧表', (ui.payMonth || '最新月') + ' 度', state.guards.length + '名'],
+    'payslip-all': ['給与明細書（全員）', (ui.payMonth || '最新月') + ' 度', state.guards.length + '名を連続印刷'],
+    dm: ['DM印刷（宛名一覧）', '得意先あて', new Set(state.sites.map(s => s.client)).size + '件'],
+    codebook: ['コードブック', '全マスタのコード一覧', Object.keys(MASTERS).length + 'マスタ'],
+    paid: ['年次有給休暇管理簿', '労基則24条の7（3年保存）', state.guards.length + '名'],
+  }[item.report] || [item.name, '', ''];
+  return `
+    ${['workreport', 'bill-site', 'bill-client'].includes(item.report) ? datePager() : ''}
+    <div class="pc-card rp-card">
+      <div class="rp-ic">🖨</div>
+      <div class="rp-body">
+        <b>${esc(info[0])}</b>
+        <span class="pc-muted">${esc(info[1])}　／　対象 ${esc(info[2])}</span>
+      </div>
+      <button class="pc-btn-navy" data-action="report-out" data-report="${item.report}">この内容で出力する</button>
+    </div>
+    <p class="pc-muted small">ブラウザの印刷ダイアログが開きます。「PDFに保存」を選ぶとファイルとして残せます。</p>`;
+}
+
 // 得意先・配置先・隊員は項目が多いので専用画面にする
-function clientMasterView() {
-  const clients = [...new Set(state.sites.map(s => s.client))];
-  return `
-    <div class="pc-pager"><b>得意先マスタ</b><span class="pc-muted small">${clients.length}件</span></div>
-    <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>得意先名称</th><th class="num">現場数</th><th>締日</th><th>入金区分</th><th>課税方法</th><th class="num">当月請求</th></tr></thead>
-      <tbody>${clients.map(c => {
-        const ss = state.sites.filter(x => x.client === c);
-        const amt = ss.reduce((a, st) => {
-          const n = state.shifts.filter(x => x.date === ui.boardDate && x.siteId === st.id).length;
-          return a + n * (shiftMinutes(st.start, st.end) / 60) * st.bill;
-        }, 0);
-        return `<tr><td><b>${esc(c)}</b></td><td class="num">${ss.length}</td>
-          <td>月末締め</td><td>振込</td><td>外税</td><td class="num">${yen(amt)}</td></tr>`;
-      }).join('')}</tbody>
-    </table></div>
-    <p class="pc-muted small">実機では得意先番号・フリガナ・敬称・請求日・入金予定日・請求書印刷銀行（最大3行）・CTI連携などを保持します。</p>`;
-}
 
-function siteMasterView() {
-  return `
-    <div class="pc-pager"><b>配置先マスタ</b><span class="pc-muted small">${state.sites.length}件</span>
-      <span style="margin-left:auto"></span>
-      <button class="pc-btn" data-action="atab" data-tab="m-siterate">配置先単価マスタへ →</button></div>
-    <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>配置先名称 / 得意先</th><th>警備業区分</th><th>時間</th><th class="num">必要人数</th>
-        <th class="num">所定休憩</th><th class="num">請求単価</th><th>必置資格</th><th>現場住所</th></tr></thead>
-      <tbody>${state.sites.map(s => `<tr>
-        <td><b>${esc(s.name)}</b><br><span class="pc-muted small">${esc(s.client)}</span></td>
-        <td>${s.kind}</td><td>${s.start}〜${s.end}${s.night ? ' 🌙' : ''}</td>
-        <td class="num">${s.need}名</td><td class="num">${s.brk || 0}分</td>
-        <td class="num">@${s.bill.toLocaleString()}</td>
-        <td>${s.reqQual ? esc(s.reqQual) : '—'}</td>
-        <td class="small">${esc(s.addrFull || s.addr)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <p class="pc-muted small">実機ではこのほか、現場監督名・現場TEL・建退共加入・無線機代・端数処理区分・固定追加請求・機械学習タブなどを保持します。</p>`;
-}
 
-function guardMasterView() {
-  return `
-    <div class="pc-pager"><b>隊員マスタ</b><span class="pc-muted small">${state.guards.length}名</span>
-      <span style="margin-left:auto"></span>
-      <button class="pc-btn" data-action="atab" data-tab="m-grate">隊員単価マスタへ →</button>
-      <button class="pc-btn" data-action="report-out" data-report="roster">🖨 警備員名簿</button></div>
-    <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>コード</th><th>氏名</th><th>支店</th><th class="num">年齢</th><th class="num">時給</th>
-        <th>資格等</th><th>クレーム / 同配置NG</th></tr></thead>
-      <tbody>${state.guards.map(g => `<tr>
-        <td>${esc(g.code)}</td><td><b>${esc(g.name)}</b></td><td>${esc(g.office)}</td>
-        <td class="num">${g.age}</td><td class="num">${yen(g.rate)}</td>
-        <td>${g.quals.length ? esc(g.quals.join('、')) : '—'}</td>
-        <td class="small">${g.caution ? '⚠️ ' + esc(g.caution) : ''}${g.siteNG ? ' 🚫 出禁あり' : ''}${g.pairNG ? ' 👥 同配置NG' : ''}${g.rookie ? ' 🔰 新任' : ''}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <p class="pc-muted small">実機の隊員マスタは 名簿情報／給与／振込情報・備考／住民税・固定支給・固定控除／資格手当設定／社会保険設定／クレーム／同配置NG／有給設定 のタブ構成です。</p>`;
-}
 
 function masterListView() {
   return `
@@ -537,6 +553,7 @@ export function renderAdmin(el) {
   const pendingLv = state.leaves.filter(l => l.status === 'pending').length;
   const cur = ui.adminTab;
   const openG = GROUPS.find(g => g.id === cur || g.items.some(i => i.id === cur));
+  const hidden = GROUPS.filter(g => !canSee(g.id)).length;
 
   el.innerHTML = `
   <div class="pc-shell">
@@ -547,7 +564,7 @@ export function renderAdmin(el) {
         ${PINNED.map(m => `<button class="pc-menu-item ${cur === m.id ? 'on' : ''}" data-action="atab" data-tab="${m.id}">
           <span class="pc-menu-ic">${m.ic}</span>${m.name}</button>`).join('')}
         <div class="pc-menu-cap">メインメニュー</div>
-        ${GROUPS.map(g => {
+        ${GROUPS.filter(g => canSee(g.id)).map(g => {
           const open = openG && openG.id === g.id;
           return `<button class="pc-menu-item pc-menu-g ${cur === g.id ? 'on' : ''}" data-action="atab" data-tab="${g.id}">
             <span class="pc-menu-ic">${g.ic}</span>${g.name}<span class="pc-menu-chev">${open ? '⌄' : '›'}</span></button>
@@ -557,6 +574,15 @@ export function renderAdmin(el) {
       </nav>
       <div class="pc-sidebar-bottom">
         <button class="pc-navy-block" data-action="atab" data-tab="edu">教育管理 ↗</button>
+        <label class="pc-staff">
+          <span>操作担当者</span>
+          <select data-action-change="staff">
+            <option value="">（制限なし）</option>
+            ${(state.masters.staff || []).map(x =>
+              `<option value="${esc(x.code)}" ${ui.staff === x.code ? 'selected' : ''}>${esc(x.name)}／${esc(x.role)}</option>`).join('')}
+          </select>
+        </label>
+        ${currentAuth() ? `<div class="pc-authnote">${esc((currentStaff() || {}).role)}権限で表示中${hidden ? `（${hidden}メニュー非表示）` : ''}</div>` : ''}
         <div class="pc-company">${esc((state.masters.company[0] || {}).name || 'GuardFlow警備株式会社')}</div>
       </div>
     </aside>

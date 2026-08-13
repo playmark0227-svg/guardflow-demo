@@ -1,8 +1,8 @@
-import { state, ui, commit } from './store.js';
+import { state, ui, commit, paidGrantOf, masterRows } from './store.js';
 import { MASTERS } from './masters.js';
 import { GROUPS, findGroup } from './menu.js';
 import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js';
-import { wageOf, periodRows } from './gantt.js';
+import { wageOf, periodRows, clientTotals, needOf } from './gantt.js';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -25,8 +25,8 @@ export function groupView(gid) {
 const optionsFor = f => {
   if (f.opt) return f.opt;
   if (f.optFrom === 'sites') return state.sites.map(s => s.name);
-  if (f.optFrom === 'work') return (state.masters.work || []).map(w => w.name);
-  return [];
+  if (f.optFrom === 'clients') return state.clients.map(c => c.name);
+  return (state.masters[f.optFrom] || []).map(x => x.name);   // 任意のマスタを選択肢にできる
 };
 
 function cell(f, v, i) {
@@ -43,7 +43,7 @@ function cell(f, v, i) {
 export function masterView(mid) {
   const m = MASTERS[mid];
   if (!m) return '<div class="pc-muted">マスタが見つかりません</div>';
-  const rows = state.masters[mid] || [];
+  const rows = masterRows(mid);
   const q = (ui.masterQ || '').trim().toLowerCase();
   const idx = rows.map((r, i) => i).filter(i =>
     !q || m.fields.some(f => String(rows[i][f.k] ?? '').toLowerCase().includes(q)));
@@ -80,7 +80,7 @@ export function masterView(mid) {
 export function orderView() {
   const date = ui.boardDate;
   const rows = state.sites.map(st => {
-    const ord = (state.orders[date] || {})[st.id] ?? st.need;
+    const ord = needOf(st, date);
     const asg = state.shifts.filter(s => s.date === date && s.siteId === st.id).length;
     const short = asg < ord;
     return `<tr class="${short ? 'row-alert' : ''}">
@@ -93,7 +93,7 @@ export function orderView() {
       <td class="num">${yen(ord * (shiftMinutes(st.start, st.end) / 60) * st.bill)}</td>
     </tr>`;
   }).join('');
-  const tot = state.sites.reduce((a, st) => a + ((state.orders[date] || {})[st.id] ?? st.need), 0);
+  const tot = state.sites.reduce((a, st) => a + needOf(st, date), 0);
   return `
     <div class="pc-pager">
       <button class="pc-btn" data-action="board-date" data-delta="-1">◀ 前日</button>
@@ -217,8 +217,8 @@ export function bonusView(listMode) {
   }).join('');
   return `
     <div class="pc-pager"><b>${listMode ? '賞与一覧入力' : '賞与入力'}</b>
-      <label class="mst-inline">支給日 <input type="date" id="bonus-date" value="${b.date || ''}"></label>
-      <label class="mst-inline">名称 <input type="text" id="bonus-name" value="${esc(b.name || '夏季賞与')}"></label>
+      <label class="mst-inline">支給日 <input type="date" id="bonus-date" data-action-change="bonus-meta" data-k="date" value="${b.date || ''}"></label>
+      <label class="mst-inline">名称 <input type="text" id="bonus-name" data-action-change="bonus-meta" data-k="name" value="${esc(b.name || '夏季賞与')}"></label>
       <span style="margin-left:auto"></span>
       <span class="pc-muted small">賞与税額算出率表から自動計算</span>
     </div>
@@ -247,11 +247,8 @@ export function zenginView() {
   }).filter(x => x.amt > 0);
   const total = lines.reduce((a, x) => a + x.amt, 0);
 
-  // 全銀フォーマット（1レコード120桁）の要点を再現
-  const head = `1210${'0000000000'}${'ｶ)ｶﾞｰﾄﾞﾌﾛｰｹｲﾋﾞ'.padEnd(40, '　')}`;
-  const body = lines.map(x =>
-    `2${String(bank.code || '0138').padStart(4, '0')}${String(bank.bcode || '201').padStart(3, '0')}` +
-    `${String(1234567).padStart(7, '0')}${esc(x.g.name).padEnd(30, '　')}${String(x.amt).padStart(10, '0')}`);
+  const recs = zenginRecords();
+  const head = recs[0], body = recs.slice(1, -1);
 
   return `
     <div class="pc-pager"><b>振込データ作成（全銀フォーマット）</b>
@@ -271,8 +268,36 @@ export function zenginView() {
       || '<tr><td colspan="4" class="pc-muted">対象データがありません</td></tr>'}</tbody>
     </table></div>
     <div class="pc-card"><div class="pc-card-head"><b>生成されるレコード（先頭3件）</b></div>
-      <pre class="zg-pre">${esc([head, ...body.slice(0, 3)].join('\n'))}</pre></div>
+      <pre class="zg-pre">${esc(recs.slice(0, 4).join('\n'))}${recs.length > 5 ? `\n…（全${recs.length}レコード）` : ''}</pre></div>
     <p class="pc-muted small">実運用では金融機関ごとの様式差（ヘッダ・トレーラ・改行コード）に合わせる必要があります。</p>`;
+}
+
+/** 全銀フォーマットのレコード列。画面プレビューとダウンロードで同じものを使う */
+export function zenginRecords(ym) {
+  const m = ym || ui.payMonth || todayKey().slice(0, 7);
+  const bank = state.masters.bank[0] || {};
+  const lines = state.guards.map((g, i) => {
+    const p = state.shifts.filter(s => s.guardId === g.id && s.date.startsWith(m))
+      .reduce((a, sh) => a + wageOf(sh, g).total, 0);
+    return { no: i + 1, g, amt: Math.round(p * 0.79) };
+  }).filter(x => x.amt > 0);
+  const total = lines.reduce((a, x) => a + x.amt, 0);
+  const kana = v => String(v || '').replace(/[^\uFF61-\uFF9FA-Z0-9()\-. ]/g, '');
+  const pad = (v, n) => String(v || '').slice(0, n).padEnd(n, ' ');
+  const num = (v, n) => String(Math.round(Number(v) || 0)).slice(-n).padStart(n, '0');
+  const now = new Date();
+  // 全銀協「総合振込」形式：ヘッダ(1)／データ(2)／トレーラ(8)／エンド(9)、いずれも120桁
+  const head = '1' + '21' + '0' + num(0, 10) + pad('ｶ)ｶﾞｰﾄﾞﾌﾛｰｹｲﾋﾞ', 40)
+    + num(now.getMonth() + 1, 2) + num(now.getDate(), 2)
+    + num(bank.code, 4) + pad(kana(bank.name), 15)
+    + num(bank.bcode, 3) + pad(kana(bank.bname), 15) + '1' + num(1234567, 7) + pad('', 17);
+  const body = lines.map(x => '2'
+    + num(x.g.bank || bank.code, 4) + pad(kana(bank.name), 15)
+    + num(x.g.branch || bank.bcode, 3) + pad(kana(bank.bname), 15) + num(0, 4)
+    + '1' + num(x.g.acct, 7) + pad(kana(x.g.kana), 30) + num(x.amt, 10)
+    + '0' + pad(x.g.code, 10) + pad('', 10) + '7' + ' ' + pad('', 7));
+  const trailer = '8' + num(lines.length, 6) + num(total, 12) + pad('', 101);
+  return [head, ...body, trailer, '9' + pad('', 119)];
 }
 
 // ===================== 得意先元帳 =====================
@@ -283,17 +308,14 @@ export function ledgerView() {
   let bal = 0;
   const dates = [...new Set(state.shifts.map(s => s.date))].sort();
   dates.forEach(d => {
-    const amt = state.sites.filter(s => s.client === cur).reduce((a, st) => {
-      const n = state.shifts.filter(x => x.date === d && x.siteId === st.id).length;
-      return a + n * (shiftMinutes(st.start, st.end) / 60) * st.bill;
-    }, 0);
-    if (!amt) return;
-    bal += Math.round(amt * 1.1);
-    rows.push(`<tr><td>${fmtMD(d)}</td><td>警備業務請求</td>
-      <td class="num">${yen(amt * 1.1)}</td><td class="num">—</td><td class="num">${yen(bal)}</td></tr>`);
+    const v = clientTotals(d).get(cur);
+    if (!v) return;
+    bal += v.total;
+    rows.push(`<tr><td>${fmtMD(d)}</td><td>警備業務請求（${v.sites}現場）</td>
+      <td class="num">${yen(v.total)}</td><td class="num">—</td><td class="num">${yen(bal)}</td></tr>`);
   });
   const paid = state.deposits[cur] ? bal : 0;
-  if (paid) { bal -= paid; rows.push(`<tr><td>${fmtMD(todayKey())}</td><td>入金</td><td class="num">—</td><td class="num">${yen(paid)}</td><td class="num">${yen(bal)}</td></tr>`); }
+  if (paid) { bal -= paid; rows.push(`<tr class="lg-paid"><td>${fmtMD(todayKey())}</td><td>入金消込</td><td class="num">—</td><td class="num">${yen(paid)}</td><td class="num">${yen(bal)}</td></tr>`); }
   return `
     <div class="pc-pager"><b>得意先元帳</b>
       <select id="ledger-client" class="mst-sel">${clients.map(c => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
@@ -346,11 +368,7 @@ export function forecastView(kind) {
 }
 
 // ===================== 有給管理 =====================
-const paidDays = g => {
-  const t = state.masters.paidGrant;
-  const yrs = 3;                                  // デモは一律3年6か月相当
-  return (t.find(x => x.months.startsWith(String(yrs))) || t[t.length - 1]).days;
-};
+const paidDays = g => paidGrantOf(g);
 export function paidView(mode) {
   const rows = state.guards.map(g => {
     const grant = paidDays(g);
@@ -382,10 +400,10 @@ export function paidView(mode) {
       <button class="pc-btn" data-action="report-out" data-report="paid">🖨 有給関連印刷</button></div>
     ${need ? `<div class="pc-banner-warn">⚠ 年5日の取得義務（労基法39条7項）が未達の隊員が <b>${need}名</b> います</div>` : ''}
     <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>コード</th><th>氏名</th><th>拠点</th><th class="num">付与日数</th><th class="num">取得</th><th class="num">残</th><th>年5日義務</th></tr></thead>
+      <thead><tr><th>コード</th><th>氏名</th><th>拠点</th><th>入社日</th><th class="num">付与日数</th><th class="num">取得</th><th class="num">残</th><th>年5日義務</th></tr></thead>
       <tbody>${rows.map(r => `<tr class="${r.must > 0 ? 'row-alert' : ''}">
         <td>${esc(r.g.code)}</td><td><b>${esc(r.g.name)}</b></td><td>${esc(r.g.office)}</td>
-        <td class="num">${r.grant}日</td><td class="num">${r.used}日</td>
+        <td>${esc(r.g.hiredAt || '—')}</td><td class="num">${r.grant}日</td><td class="num">${r.used}日</td>
         <td class="num ${r.low ? 'warn-text' : ''}">${r.left}日</td>
         <td>${r.must > 0 ? `<span class="pc-chip-warn">あと${r.must}日</span>` : '<span class="pc-chip-ok">✓ 達成</span>'}</td>
       </tr>`).join('')}</tbody>

@@ -1,7 +1,7 @@
 import {
   state, ui, subscribe, rerender, resetDemo, punch, toggleOffline,
   checkAssign, assign, unassign, undoUnassign, addNotice, commit,
-  masterSet, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
+  getSaveError, setWeather, masterSet, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
   editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
 } from './store.js';
 import { renderGuard } from './guard.js';
@@ -10,10 +10,12 @@ import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
   dmHTML, codebookHTML, paidHTML, setMastersRef,
+  nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
 } from './prints.js';
 import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js';
 import { MASTERS } from './masters.js';
 import { findItem } from './menu.js';
+import { zenginRecords } from './screens.js';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -77,7 +79,12 @@ function printHTML(html) {
 }
 
 // ---- レンダリング ----
+let lastSaveError = null;
 function render() {
+  // 保存に失敗していたら必ず知らせる（黙って消えるのを防ぐ）
+  const err = getSaveError();
+  if (err && err !== lastSaveError) { lastSaveError = err; setTimeout(() => toast('⚠ ' + err, 'danger'), 0); }
+  if (!err) lastSaveError = null;
   document.getElementById('btn-role-guard').classList.toggle('active', ui.role === 'guard');
   document.getElementById('btn-role-admin').classList.toggle('active', ui.role === 'admin');
   const el = document.getElementById('app');
@@ -180,7 +187,8 @@ document.addEventListener('click', async e => {
   else if (a === 'master-add') { masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
   else if (a === 'master-del') {
     if (!confirm('この行を削除します。よろしいですか？')) return;
-    masterDel(t.dataset.m, Number(t.dataset.i)); toast('削除しました');
+    const err = masterDel(t.dataset.m, Number(t.dataset.i));
+    toast(err ? '⚠ ' + err : '削除しました', err ? 'danger' : 'ok');
   }
   else if (a === 'master-bulk') {
     const add = [['160-0022', '東京都新宿区新宿'], ['100-0005', '東京都千代田区丸の内'], ['150-0043', '東京都渋谷区道玄坂'],
@@ -195,7 +203,7 @@ document.addEventListener('click', async e => {
     state.orders[ui.boardDate] = { ...(state.orders[prev] || {}) };
     commit(); toast(`✓ ${fmtMD(prev)} の受注をコピーしました`);
   }
-  else if (a === 'zengin-dl') { download('zengin.txt', state.guards.map(g => g.name).join('\n'), 'text/plain'); }
+  else if (a === 'zengin-dl') { download('zengin.txt', zenginRecords().join('\r\n'), 'text/plain'); }
   else if (a === 'export') { exportCsv(t.dataset.k); }
   else if (a === 'bulk-run') {
     const from = document.getElementById('blk-from').value, to = document.getElementById('blk-to').value;
@@ -247,6 +255,15 @@ document.addEventListener('click', async e => {
     else if (r === 'dm') printHTML(dmHTML());
     else if (r === 'codebook') printHTML(codebookHTML());
     else if (r === 'paid') printHTML(paidHTML());
+    else if (r === 'nippo') printHTML(nippoHTML(ui.boardDate));
+    else if (r === 'edu-sheet') printHTML(eduSheetHTML());
+    else if (r === 'chingin') printHTML(chinginHTML(ui.payMonth));
+    else if (r === 'contract') {
+      const id = prompt('警備契約書を出力する配置先を選んでください。\n' +
+        state.sites.map((s2, i) => `${i + 1}. ${s2.name}`).join('\n'), '1');
+      const st = state.sites[Number(id) - 1];
+      if (st) printHTML(contractHTML(st.id)); else toast('配置先を選んでください', 'warn');
+    }
     else if (r === 'invoice-menu') { ui.adminTab = 'billing'; rerender(); }
     else toast('この帳票はデモでは未実装です', 'warn');
   }
@@ -291,7 +308,10 @@ document.addEventListener('change', e => {
   if (ac === 'punch-edit') { editPunch(el.dataset.shift, el.dataset.type, el.value); return; }
   if (ac === 'allowance') { setAllowance(ui.payMonth || todayKey().slice(0, 7), el.dataset.g, el.dataset.k, Number(el.value) || 0); return; }
   if (ac === 'bonus') { setBonus(el.dataset.g, Number(el.value) || 0); return; }
+  if (ac === 'bonus-meta') { state.bonus[el.dataset.k] = el.value; commit(); return; }
   if (ac === 'option') { setOption(el.dataset.k, el.checked); return; }
+  if (ac === 'set-weather') { setWeather(el.dataset.date, el.dataset.site, el.value); return; }
+  if (ac === 'staff') { ui.staff = el.value; rerender(); return; }
   if (el.id === 'ledger-client') { ui.ledgerClient = el.value; rerender(); return; }
   // 勤務ガントのフィルタ行
   if (e.target.id === 'gantt-from') { if (e.target.value) { ui.boardDate = e.target.value; rerender(); } }

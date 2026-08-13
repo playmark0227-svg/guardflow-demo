@@ -1,6 +1,59 @@
 // 警備Pro のマスタ群をスキーマで定義し、1つの汎用エディタで全画面を賄う。
 // fields: k=キー / l=見出し / t=型(text,num,yen,sel,chk,date,area) / w=列幅 / opt=選択肢 / req=必須 / hint=注記
 export const MASTERS = {
+  // 業務データそのものを編集するマスタ。store で state 直下のコレクションを指す
+  client: {
+    name: '得意先マスタ', key: 'name', store: 'clients', idPrefix: 'c',
+    note: '締日・請求日・課税方法は請求集計と請求書にそのまま使われます。得意先を追加すると配置先マスタの得意先欄から選べます',
+    fields: [
+      { k: 'code', l: '得意先番号', w: 100, hint: '6桁' }, { k: 'name', l: '得意先名', w: 240, req: true },
+      { k: 'kana', l: 'フリガナ', w: 200 }, { k: 'abbr', l: '略称', w: 130 },
+      { k: 'honor', l: '敬称', t: 'sel', opt: ['御中', '様', '殿'], w: 90 },
+      { k: 'addr', l: '住所', w: 260 }, { k: 'tel', l: '代表TEL', w: 130 }, { k: 'fax', l: 'FAX', w: 130 },
+      { k: 'tax', l: '課税方法', t: 'sel', opt: ['外税', '内税', '非課税'], w: 110 },
+      { k: 'close', l: '締日', t: 'sel', opt: ['月末', '20日', '25日', '15日', '10日', '5日'], w: 100 },
+      { k: 'payMonth', l: '請求（カ月後）', t: 'num', w: 120 },
+      { k: 'payDay', l: '入金予定日', t: 'sel', opt: ['月末', '5日', '10日', '15日', '20日', '25日'], w: 120 },
+      { k: 'payType', l: '入金区分', t: 'sel', opt: ['振込', '現金', '手形', '相殺'], w: 100 },
+      { k: 'note', l: '請求書備考', w: 240 },
+    ],
+  },
+  siteM: {
+    name: '配置先マスタ', key: 'name', store: 'sites', idPrefix: 's',
+    note: '所定時間・所定休憩・必要人数は管制ボードと賃金計算の前提になります。単価は「配置先単価マスタ」が優先されます',
+    fields: [
+      { k: 'name', l: '配置先名', w: 240, req: true }, { k: 'abbr', l: '略称', w: 140 },
+      { k: 'mark', l: '記号', w: 70, hint: '全角1字' },
+      { k: 'client', l: '得意先', t: 'sel', optFrom: 'clients', w: 240, req: true },
+      { k: 'kind', l: '警備業区分', t: 'sel', optFrom: 'bizType', w: 110 },
+      { k: 'work', l: '既定の勤務', t: 'sel', optFrom: 'work', w: 130 },
+      { k: 'start', l: '開始', w: 90, hint: 'HH:MM' }, { k: 'end', l: '終了', w: 90, hint: 'HH:MM' },
+      { k: 'brk', l: '所定休憩(分)', t: 'num', w: 110 }, { k: 'need', l: '必要人数', t: 'num', w: 100 },
+      { k: 'reqQual', l: '必要資格', t: 'sel', optFrom: 'qual', w: 190 },
+      { k: 'bill', l: '請求単価(円/h)', t: 'yen', w: 130 },
+      { k: 'night', l: '夜間現場', t: 'chk', w: 90 },
+      { k: 'addrFull', l: '住所', w: 260 },
+      { k: 'note1', l: '注意事項1', w: 240 }, { k: 'note2', l: '注意事項2', w: 240 },
+    ],
+  },
+  guardM: {
+    name: '隊員マスタ', key: 'name', store: 'guards', idPrefix: 'g',
+    note: '入社年月日は有給付与日数の判定に、単価ランクは時給に、カナ氏名と口座は振込データに使われます',
+    fields: [
+      { k: 'code', l: '隊員番号', w: 100, hint: '6桁' }, { k: 'name', l: '氏名', w: 150, req: true },
+      { k: 'kana', l: 'カナ氏名', w: 150, hint: '半角カナ' },
+      { k: 'office', l: '所属拠点', t: 'sel', optFrom: 'branch', w: 130 },
+      { k: 'gtype', l: '隊員区分', t: 'sel', optFrom: 'guardType', w: 120 },
+      { k: 'age', l: '年齢', t: 'num', w: 80 },
+      { k: 'hiredAt', l: '入社年月日', t: 'date', w: 140 },
+      { k: 'rateRank', l: '単価ランク', t: 'sel', opt: ['A', 'B', 'C', 'D'], w: 100 },
+      { k: 'rate', l: '時給(円)', t: 'yen', w: 110 },
+      { k: 'paidLeaveLeft', l: '有給残(日)', t: 'num', w: 100 },
+      { k: 'bank', l: '銀行コード', w: 100 }, { k: 'branch', l: '支店コード', w: 100 },
+      { k: 'acct', l: '口座番号', w: 120 },
+      { k: 'caution', l: '管制メモ', w: 280 },
+    ],
+  },
   // ===== マスタ管理 =====
   company: {
     name: '自社マスタ', single: true, key: 'code',
@@ -30,7 +83,7 @@ export const MASTERS = {
     name: '担当者マスタ', key: 'code',
     fields: [
       { k: 'code', l: '担当者コード', w: 110, req: true }, { k: 'name', l: '氏名', w: 150, req: true },
-      { k: 'branch', l: '所属支店', t: 'sel', opt: ['横浜本店', '川崎営業所', '都筑営業所'], w: 140 },
+      { k: 'branch', l: '所属支店', t: 'sel', optFrom: 'branch', w: 140 },
       { k: 'role', l: '権限', t: 'sel', opt: ['管理者', '管制', '事務', '閲覧のみ'], w: 120 },
       { k: 'tel', l: '内線', w: 90 },
     ],
@@ -78,11 +131,12 @@ export const MASTERS = {
     ],
   },
   holiday: {
-    name: '祝日設定マスタ', key: 'date', note: '勤務予定の休日判定と管制日報に反映されます',
+    name: '祝日設定マスタ', key: 'date', note: '国民の祝日は所定休日です。労基法35条の法定休日（週1日）に当たる日だけ「法定休日」をONにすると、その日の労働に35%割増が付きます',
     fields: [
       { k: 'date', l: '休日', t: 'date', w: 140, req: true },
       { k: 'kind', l: '休日区分', t: 'sel', opt: ['固定', '変動'], w: 100 },
       { k: 'name', l: '休日内容', w: 200, req: true },
+      { k: 'legal', l: '法定休日', t: 'chk', w: 100, hint: 'ONの日だけ35%割増' },
     ],
     seed: [
       { date: '2026-08-11', kind: '固定', name: '山の日' }, { date: '2026-09-21', kind: '変動', name: '敬老の日' },
@@ -107,7 +161,7 @@ export const MASTERS = {
     fields: [
       { k: 'name', l: '正式名称', w: 130, req: true, hint: '全角6文字' },
       { k: 'abbr', l: '略称', w: 90, hint: '全角4文字' }, { k: 'mark', l: '記号', w: 70, hint: '全角2文字' },
-      { k: 'group', l: '勤務グループ', t: 'sel', opt: ['01 日勤資格無', '02 日勤資格有', '03 夜勤', '04 当務'], w: 140 },
+      { k: 'group', l: '勤務グループ', t: 'sel', optFrom: 'workGroup', w: 140 },
       { k: 'bill', l: '請求', t: 'chk', w: 70 }, { k: 'pay', l: '給与', t: 'chk', w: 70 },
       { k: 'dn', l: '昼夜区分', t: 'sel', opt: ['昼', '夜'], w: 90 },
       { k: 'duty', l: '当務', t: 'chk', w: 70 }, { k: 'hol', l: '休日勤務', t: 'chk', w: 90 },
@@ -137,6 +191,7 @@ export const MASTERS = {
     seed: [
       { code: '01', name: '正社員' }, { code: '02', name: 'パート・アルバイト' },
       { code: '03', name: '嘱託' }, { code: '04', name: '外注' }, { code: '05', name: '内勤' },
+      { code: '06', name: '日雇（源泉は日額表・丙欄）' },
     ],
   },
   qual: {
@@ -202,6 +257,7 @@ export const MASTERS = {
       { site: 'みなとみらい夏祭り 雑踏警備', work: '夜勤資格無', unit: 13800, ot: 2875, dayOt: 2588, early: 2588, late: 2300, hour: 2300, night: 2875, nightOt: 3450 },
       { site: '港北物流センター 夜間警備', work: '当務', unit: 31200, ot: 3250, dayOt: 2925, early: 2925, late: 2600, hour: 2600, night: 3250, nightOt: 3900 },
       { site: '首都高 夜間補修規制', work: '夜勤資格有', unit: 16800, ot: 3500, dayOt: 3150, early: 3150, late: 2800, hour: 2800, night: 3500, nightOt: 4200 },
+      { site: '第二京浜 舗装工事', work: '日勤資格有', unit: 18000, ot: 2500, dayOt: 2250, early: 2250, late: 2000, hour: 2000, night: 2500, nightOt: 3000 },
     ],
   },
   billItem: {
@@ -371,6 +427,7 @@ export const MASTERS = {
 /** マスタの初期データを state 用に生成する */
 export function seedMasters() {
   const out = {};
-  for (const [id, m] of Object.entries(MASTERS)) out[id] = m.seed.map(r => ({ ...r }));
+  // store 指定のマスタは業務データ（state.clients など）が実体なので複製しない
+  for (const [id, m] of Object.entries(MASTERS)) if (!m.store) out[id] = m.seed.map(r => ({ ...r }));
   return out;
 }

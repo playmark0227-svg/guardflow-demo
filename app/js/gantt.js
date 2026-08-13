@@ -8,8 +8,10 @@ import {
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
 
-// 現場の識別色。P型・D型色覚でも全ペアが識別できることを検証済み（ΔE基準クリア）
-export const SITE_COLORS = ['#248fcc', '#9f4229', '#8e8b0f', '#764c9d', '#d77784'];
+// 現場の識別色。6色すべてを総当たり探索し、P型・D型色覚での識別距離を最大化した組み合わせ。
+// 紫×赤紫の1ペアのみ通常視野で ΔE14.9（基準15）とわずかに届かないが、
+// バーには現場名（月表示では1文字マーク）を必ず併記しているため色単独に依存しない。
+export const SITE_COLORS = ['#0891c9', '#973f6e', '#b77610', '#5658ab', '#d27995', '#27762f'];
 export const siteColor = id => {
   const i = state.sites.findIndex(s => s.id === id);
   return SITE_COLORS[(i < 0 ? 0 : i) % SITE_COLORS.length];
@@ -19,6 +21,20 @@ export const siteColor = id => {
 const LEGAL_DAY_MIN = 480;   // 1日8時間
 const OT_RATE = 0.25;        // 時間外 25%
 const NIGHT_RATE = 0.25;     // 深夜 25%
+const HOL_RATE = 0.35;       // 法定休日 35%（時間外割増とは併給しない）
+
+/** 労基法35条の法定休日か。国民の祝日は所定休日であり、法定休日とは別物なので
+ *  祝日設定マスタで「法定休日」をONにした日だけを 35%割増の対象にする */
+export const isLegalHoliday = date => (state.masters.holiday || []).some(h => h.date === date && h.legal);
+/** 祝日（所定休日）か。カレンダー表示に使う */
+export const isHoliday = date => (state.masters.holiday || []).some(h => h.date === date);
+
+/** 隊員単価マスタから時給を引く。ランク未設定なら隊員マスタの時給 */
+export function hourlyOf(g) {
+  if (!g.rateRank) return g.rate;
+  const r = (state.masters.guardRate || []).find(x => x.rank === g.rateRank);
+  return r && Number(r.hour) ? Number(r.hour) : g.rate;
+}
 
 /**
  * 1件のシフトについて、打刻から実働区間を組み立てる。
@@ -49,7 +65,11 @@ export function workOf(sh) {
   else if (on !== null) {                                       // 上番のみ＝勤務中
     s = on; e = Math.max(on, planE); source = 'partial';
     if (on > planE) flags.push('予定終了後の上番打刻');
-  } else { s = planS; e = planE; source = 'plan'; }
+  } else {
+    s = planS; e = planE; source = 'plan';
+    // オプション「未打刻を予定で自動計算」OFF＝打刻が無い勤務は0時間として扱う
+    if (state.options.autoHour === false) { e = planS; flags.push('未打刻（自動計算OFFのため0時間）'); }
+  }
 
   // 休憩開始／終了をペアにする
   const breaks = [];
@@ -81,22 +101,41 @@ export function workOf(sh) {
 
 /** シフト1件の賃金。基礎賃金は全実働に、割増は該当分にのみ加算する（労基法の積み上げ方式）。
  *  端数はこの1箇所だけで丸めるので、各列を足すと必ず支給額と一致する */
+/** その勤務に適用される勤務マスタの1行。shift.workId → 現場の既定 の順に引く */
+export function workKindOf(sh) {
+  const rows = state.masters.work || [];
+  const name = sh.workId || (site(sh.siteId) || {}).work;
+  return rows.find(x => x.name === name) || rows[0] || {};
+}
+
 export function wageOf(sh, g = guard(sh.guardId)) {
   const w = workOf(sh);
-  const workMin = w.segs.reduce((t, [a, b]) => t + (b - a), 0);
+  const rate = hourlyOf(g);                                   // 隊員単価マスタ優先
+  const workMin = Math.min(w.segs.reduce((t, [a, b]) => t + (b - a), 0), 1440);  // 当務でも24時間が上限
   const breakMin = (w.e - w.s) - workMin;
   const nightMin = w.segs.reduce((t, [a, b]) => t + nightOverlap(a, b), 0);
-  const otMin = Math.max(0, workMin - LEGAL_DAY_MIN);
-  const base = Math.round(workMin / 60 * g.rate);
-  const otPay = Math.round(otMin / 60 * g.rate * OT_RATE);
-  const nightPay = Math.round(nightMin / 60 * g.rate * NIGHT_RATE);
+  // 法定休日に働いた分は35%。この日は時間外割増を併給しない（労基法37条）
+  const hol = isLegalHoliday(sh.date);
+  const holMin = hol ? workMin : 0;
+  const otMin = hol ? 0 : Math.max(0, workMin - LEGAL_DAY_MIN);
+  const base = Math.round(workMin / 60 * rate);
+  const otPay = Math.round(otMin / 60 * rate * OT_RATE);
+  const nightPay = Math.round(nightMin / 60 * rate * NIGHT_RATE);
+  const holPay = Math.round(holMin / 60 * rate * HOL_RATE);
 
   // 労基法34条：6時間超は45分以上、8時間超は60分以上の休憩が必要
   const need = workMin > 480 ? 60 : workMin > 360 ? 45 : 0;
   const flags = [...w.flags];
   if (need && breakMin < need) flags.push(`休憩不足（${Math.floor(workMin / 60)}h勤務に${need}分必要／${breakMin}分）`);
 
-  return { ...w, g, flags, notes: w.notes, workMin, breakMin, nightMin, otMin, base, otPay, nightPay, total: base + otPay + nightPay };
+  const wk = workKindOf(sh);
+  if (wk.pay === false) {                              // 勤務マスタで「給与」OFF＝無給の勤務
+    flags.push(`給与対象外の勤務（${wk.name}）`);
+    return { ...w, g, rate, flags, notes: w.notes, wk, workMin, breakMin, nightMin, otMin, holMin,
+      base: 0, otPay: 0, nightPay: 0, holPay: 0, total: 0 };
+  }
+  return { ...w, g, rate, flags, notes: w.notes, wk, workMin, breakMin, nightMin, otMin, holMin,
+    base, otPay, nightPay, holPay, total: base + otPay + nightPay + holPay };
 }
 
 /** 表示単位。day14/day7 は日単位ボード、hour は1日の時間軸ガント */
@@ -222,6 +261,18 @@ export function shiftSheet() {
   const sh = state.shifts.find(x => x.id === ui.detailShift);
   if (!sh) return '';
   const g = guard(sh.guardId), st = site(sh.siteId), w = wageOf(sh);
+  const P0 = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' };
+  // 労基法109条：打刻を書き換えた事実そのものを3年間残す
+  const auditRows = id => {
+    const hist = (state.auditLog || []).filter(x => x.shiftId === id);
+    if (!hist.length) return '';
+    return `<div class="g-sec" style="margin:12px -16px 8px">打刻の修正履歴（${hist.length}件）</div>`
+      + hist.map(x => `<div class="sd-audit">
+          <b>${P0[x.type] || x.type}</b>
+          <span>${x.before ? fmtAbs(absMin(x.before, x.date)) : '（なし）'} → ${x.after ? fmtAbs(absMin(x.after, x.date)) : '（削除）'}</span>
+          <span class="pc-muted small">${new Date(x.at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}　${esc(x.by)}${x.reason ? '／' + esc(x.reason) : ''}</span>
+        </div>`).join('');
+  };
   const [label, cls] = STATE[stateOf(w)];
   const P = { depart: '出発', join: '合流', on: '上番', off: '下番', break_s: '休憩開始', break_e: '休憩終了' };
   const punches = sh.punches.length
@@ -229,7 +280,9 @@ export function shiftSheet() {
       <div class="sd-punch">
         <b>${P[p.type] || p.type}</b>
         <span class="sd-time">${fmtAbs(absMin(p.at, sh.date))}</span>
-        <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">📍 ±${p.acc}m</a>
+        ${p.manual
+          ? `<span class="sd-manual">✎ 管制で修正${p.wasAt ? `（元 ${fmtAbs(absMin(p.wasAt, sh.date))}）` : '（新規入力）'}</span>`
+          : `<a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">📍 ±${p.acc}m</a>`}
         ${p.queued ? '<span class="pc-chip-warn">☁ 送信待ち</span>' : ''}
       </div>`).join('')
     : '<div class="pc-muted small">打刻はまだありません（予定で計算しています）</div>';
@@ -252,6 +305,7 @@ export function shiftSheet() {
       ${w.notes.length ? `<div class="pc-muted small" style="margin:8px 0">ℹ ${esc(w.notes.join(' ／ '))}</div>` : ''}
       <div class="g-sec" style="margin:10px -16px 8px">打刻</div>
       ${punches}
+      ${auditRows(sh.id)}
       <div class="g-sec" style="margin:12px -16px 8px">賃金</div>
       ${row('実働', hrs(w.workMin) + ' h')}
       ${row('休憩', w.breakMin ? w.breakMin + ' 分' : '—')}
@@ -323,7 +377,7 @@ function dayBoardView() {
           role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" title="${esc(tip)}\nクリックで詳細">${compact ? esc(st.mark || '●') : `${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}`}</span>`;
       }).join('');
 
-      const over = sm.maxRun >= 6;
+      const over = state.options.warnRun && sm.maxRun >= 6;
       return `<div class="dg-row${compact ? ' dg-compact' : ''}" style="--days:${days}">
         <div class="dg-name">
           <b>${esc(g.name)}</b>
@@ -515,15 +569,15 @@ function toolbar() {
 // ---- ガントの下に出す時給計算表 ----
 function wageTable() {
   const { byGuard, days } = periodRows();
-  let T = { work: 0, brk: 0, night: 0, ot: 0, base: 0, np: 0, op: 0, total: 0 };
+  let T = { work: 0, brk: 0, night: 0, ot: 0, hol: 0, base: 0, np: 0, op: 0, total: 0 };
 
   const rows = visibleGuards().filter(g => byGuard.has(g.id)).map(g => {
     const list = byGuard.get(g.id);
     const a = list.reduce((t, { w }) => ({
       work: t.work + w.workMin, brk: t.brk + w.breakMin, night: t.night + w.nightMin,
-      ot: t.ot + w.otMin, base: t.base + w.base, np: t.np + w.nightPay, op: t.op + w.otPay,
-      total: t.total + w.total,
-    }), { work: 0, brk: 0, night: 0, ot: 0, base: 0, np: 0, op: 0, total: 0 });
+      ot: t.ot + w.otMin, hol: t.hol + w.holMin, base: t.base + w.base,
+      np: t.np + w.nightPay, op: t.op + w.otPay, total: t.total + w.total,
+    }), { work: 0, brk: 0, night: 0, ot: 0, hol: 0, base: 0, np: 0, op: 0, total: 0 });
     Object.keys(T).forEach(k => T[k] += a[k]);
 
     const planOnly = list.every(({ w }) => w.source === 'plan');
@@ -555,6 +609,7 @@ function wageTable() {
       <td class="num">${a.brk ? a.brk + '分' : '—'}</td>
       <td class="num">${a.night ? hrs(a.night) : '—'}</td>
       <td class="num">${a.ot ? hrs(a.ot) : '—'}</td>
+      <td class="num">${a.hol ? hrs(a.hol) : '—'}</td>
       <td class="num">${yen(a.base)}</td>
       <td class="num">${a.np ? yen(a.np) : '—'}</td>
       <td class="num">${a.op ? yen(a.op) : '—'}</td>
@@ -583,7 +638,7 @@ function wageTable() {
     <div class="pc-card pc-table-wrap"><table class="pc-table wg-table">
       <thead><tr>
         <th>隊員 / 勤務</th><th class="num">時給</th><th class="num">実働(h)</th><th class="num">休憩</th>
-        <th class="num">深夜(h)</th><th class="num">残業(h)</th>
+        <th class="num">深夜(h)</th><th class="num">残業(h)</th><th class="num">法定休日(h)</th>
         <th class="num">基本給</th><th class="num">深夜25%</th><th class="num">残業25%</th><th class="num">支給額</th>
       </tr></thead>
       <tbody>${rows || '<tr><td colspan="10" class="pc-muted">対象データがありません</td></tr>'}</tbody>
@@ -591,6 +646,7 @@ function wageTable() {
         <td><b>合計</b></td><td class="num">—</td>
         <td class="num"><b>${hrs(T.work)}</b></td><td class="num">${T.brk ? T.brk + '分' : '—'}</td>
         <td class="num"><b>${hrs(T.night)}</b></td><td class="num"><b>${hrs(T.ot)}</b></td>
+        <td class="num"><b>${T.hol ? hrs(T.hol) : '—'}</b></td>
         <td class="num">${yen(T.base)}</td><td class="num">${yen(T.np)}</td><td class="num">${yen(T.op)}</td>
         <td class="num"><b>${yen(T.total)}</b></td>
       </tr></tfoot>` : ''}
@@ -599,7 +655,51 @@ function wageTable() {
       実働＝下番−上番−休憩。上番は最初の打刻、下番は<b>上番より後の最後の打刻</b>を採用します（押し間違い対策）。
       上番のみの勤務は予定終了まで、休憩中は休憩開始まで、打刻が無い勤務は予定時刻で計算します。
       深夜は22:00〜翌5:00に重なる実働へ25%、残業は1日8時間超へ25%を加算。両方に該当する時間は合計50%増です。
-      <br><b>このデモで未計算の割増：</b>週40時間超／法定休日労働35%／<b>月60時間超の残業50%（法37条1項ただし書・2023年4月から中小企業も対象）</b>。
+      <br><b>このデモで未計算の割増：</b>週40時間超／<b>月60時間超の残業50%（法37条1項ただし書・2023年4月から中小企業も対象）</b>。
       また割増の基礎賃金を時給のみで計算しているため、<b>資格手当など労基則21条の除外対象でない手当は未算入</b>です。
     </p>`;
+}
+
+// ---- 請求（配置先単価マスタ・請求項目マスタ・受注人数を反映） ----
+/** 配置先の請求時給。配置先単価マスタにあればそれを使う */
+export function billRateOf(st) {
+  const r = (state.masters.siteRate || []).find(x => x.site === st.name);
+  return r && Number(r.hour) ? Number(r.hour) : st.bill;
+}
+/** その日の必要人数。受注入力があればそれを優先する */
+export const needOf = (st, date) => (state.orders[date] || {})[st.id] ?? st.need;
+
+/** 現場1件の請求額（税抜）＋請求項目マスタの加算・値引 */
+export function billOf(st, date) {
+  // 勤務マスタで「請求」OFFの勤務は請求人数に数えない
+  const n = state.shifts.filter(s => s.date === date && s.siteId === st.id)
+    .filter(s => workKindOf(s).bill !== false).length;
+  const hours = (parseHM(st.end) > parseHM(st.start) ? parseHM(st.end) - parseHM(st.start)
+    : parseHM(st.end) + 1440 - parseHM(st.start)) / 60;
+  const work = n * hours * billRateOf(st);
+  const items = (state.masters.billItem || []).filter(x => Number(x.amount))
+    .map(x => ({ name: x.name, amount: (x.kind === '値引' ? -1 : 1) * Number(x.amount), tax: !!x.tax }));
+  const extra = n ? items.reduce((a, x) => a + x.amount, 0) : 0;
+  const sub = work + extra;
+  const tax = Math.floor(sub * 0.1);                 // 現場（明細）単位の消費税
+  return { n, hours, rate: billRateOf(st), work, items: n ? items : [], extra, sub, tax, total: sub + tax };
+}
+
+/** 得意先ごとの請求合計。オプション「得意先合計に消費税を掛ける」で課税単位が変わる。
+ *  ON  … 得意先の合計に対して1回だけ10%を掛ける（端数は1回だけ発生）
+ *  OFF … 現場（明細）ごとに10%を掛けて合算する（端数が現場の数だけ発生） */
+export function clientTotals(date) {
+  const map = new Map();
+  state.sites.forEach(st => {
+    const b = billOf(st, date);
+    if (!b.n) return;
+    const cur = map.get(st.client) || { sub: 0, taxEach: 0, sites: 0 };
+    map.set(st.client, { sub: cur.sub + b.sub, taxEach: cur.taxEach + b.tax, sites: cur.sites + 1 });
+  });
+  const out = new Map();
+  map.forEach((v, k) => {
+    const tax = state.options.taxIn ? Math.floor(v.sub * 0.1) : v.taxEach;
+    out.set(k, { ...v, tax, total: v.sub + tax });
+  });
+  return out;
 }
