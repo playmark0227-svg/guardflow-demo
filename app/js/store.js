@@ -1,7 +1,8 @@
 import { seedData } from './data.js';
+import { seedMasters } from './masters.js';
 import { toKey, todayKey, uid } from './util.js';
 
-const KEY = 'guardflow-demo-v2';
+const KEY = 'guardflow-demo-v3';
 const listeners = new Set();
 
 // 画面状態（永続化しない）
@@ -16,6 +17,10 @@ export const ui = {
   reportMore: false,
   payMonth: null,            // 給与明細で見ている月（null=最新）
   noticeId: null,            // お知らせ本文で開いている記事
+  groupId: null,             // 開いているメニューグループ
+  itemId: null,              // 開いている機能
+  masterQ: '',               // マスタ内検索
+  ledgerClient: null,
   shiftDetail: null,
   leaveEdit: false,
   ganttUnit: 'day14',        // day14 | day7 | hour
@@ -139,4 +144,68 @@ export function setLeave(id, status) {
 export function toggleDeposit(siteId) {
   state.deposits[siteId] = !state.deposits[siteId];
   commit();
+}
+
+
+// ---- マスタ（スキーマ駆動）----
+export function masterSet(mid, i, key, value) {
+  const rows = state.masters[mid];
+  if (!rows || !rows[i]) return;
+  rows[i][key] = value;
+  commit();
+}
+export function masterAdd(mid) {
+  state.masters[mid] = state.masters[mid] || [];
+  state.masters[mid].unshift({});
+  commit();
+}
+export function masterDel(mid, i) {
+  state.masters[mid].splice(i, 1);
+  commit();
+}
+export function setOption(k, v) { state.options[k] = v; commit(); }
+export function setOrder(date, siteId, n) {
+  state.orders[date] = state.orders[date] || {};
+  state.orders[date][siteId] = n;
+  commit();
+}
+export function setAllowance(month, gid, k, v) {
+  state.allowances[month] = state.allowances[month] || {};
+  state.allowances[month][gid] = state.allowances[month][gid] || {};
+  state.allowances[month][gid][k] = v;
+  commit();
+}
+export function setBonus(gid, v) {
+  state.bonus.amount = state.bonus.amount || {};
+  state.bonus.amount[gid] = v;
+  commit();
+}
+/** 勤務実績の打刻を直接編集する（勤務実績入力画面から） */
+export function editPunch(shiftId, type, hhmm) {
+  const sh = state.shifts.find(x => x.id === shiftId);
+  if (!sh) return;
+  sh.punches = sh.punches.filter(p => p.type !== type);
+  if (hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const base = new Date(sh.date + 'T00:00:00');
+    // 日跨ぎ勤務で下番が開始より前の時刻なら翌日として扱う
+    let min = h * 60 + m;
+    const st = Number(sh.start.slice(0, 2)) * 60 + Number(sh.start.slice(3));
+    if (type === 'off' && min < st) min += 1440;
+    sh.punches.push({ type, at: new Date(base.getTime() + min * 60000).toISOString(), lat: 35.44, lng: 139.62, acc: 15 });
+  }
+  commit();
+}
+export function bulkUpdate(from, to, siteId, op) {
+  const hit = state.shifts.filter(s => s.date >= from && s.date <= to && (!siteId || s.siteId === siteId));
+  if (op === 'clear-punch') hit.forEach(s => { s.punches = []; });
+  else if (op === 'unassign') state.shifts = state.shifts.filter(s => !hit.includes(s));
+  commit();
+  return hit.length;
+}
+export function purgeBefore(date) {
+  const n = state.shifts.filter(s => s.date < date).length;
+  state.shifts = state.shifts.filter(s => s.date >= date);
+  commit();
+  return n;
 }

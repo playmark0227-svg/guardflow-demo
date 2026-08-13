@@ -1,11 +1,19 @@
 import {
   state, ui, subscribe, rerender, resetDemo, punch, toggleOffline,
-  checkAssign, assign, unassign, undoUnassign, addNotice, requestLeave, cancelLeave, setLeave, toggleDeposit,
+  checkAssign, assign, unassign, undoUnassign, addNotice, commit,
+  masterSet, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
+  editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
 } from './store.js';
 import { renderGuard } from './guard.js';
 import { renderAdmin } from './admin.js';
-import { payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML } from './prints.js';
-import { addDays, todayKey, addMonths } from './util.js';
+import {
+  payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
+  workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
+  dmHTML, codebookHTML, paidHTML, setMastersRef,
+} from './prints.js';
+import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js';
+import { MASTERS } from './masters.js';
+import { findItem } from './menu.js';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -167,6 +175,43 @@ document.addEventListener('click', async e => {
     if (!ui.selectedGuard) { toast('先に「未配置の隊員」から選択してください', 'warn'); return; }
     tryAssign(ui.selectedGuard, t.dataset.site);
   }
+  // --- 新メニュー・マスタ ---
+  else if (a === 'open-item') { ui.adminTab = t.dataset.item; ui.masterQ = ''; rerender(); }
+  else if (a === 'master-add') { masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
+  else if (a === 'master-del') {
+    if (!confirm('この行を削除します。よろしいですか？')) return;
+    masterDel(t.dataset.m, Number(t.dataset.i)); toast('削除しました');
+  }
+  else if (a === 'master-bulk') {
+    const add = [['160-0022', '東京都新宿区新宿'], ['100-0005', '東京都千代田区丸の内'], ['150-0043', '東京都渋谷区道玄坂'],
+                 ['231-0023', '神奈川県横浜市中区山下町'], ['210-0006', '神奈川県川崎市川崎区砂子']];
+    let n = 0;
+    add.forEach(([zip, addr]) => { if (!state.masters.zip.some(z => z.zip === zip)) { state.masters.zip.push({ zip, addr }); n++; } });
+    commit(); toast(`✓ ${n}件を取り込みました（合計 ${state.masters.zip.length}件）`);
+  }
+  else if (a === 'master-print') { printHTML(masterSheetHTML(t.dataset.m)); }
+  else if (a === 'order-copy') {
+    const prev = addDays(ui.boardDate, -1);
+    state.orders[ui.boardDate] = { ...(state.orders[prev] || {}) };
+    commit(); toast(`✓ ${fmtMD(prev)} の受注をコピーしました`);
+  }
+  else if (a === 'zengin-dl') { download('zengin.txt', state.guards.map(g => g.name).join('\n'), 'text/plain'); }
+  else if (a === 'export') { exportCsv(t.dataset.k); }
+  else if (a === 'bulk-run') {
+    const from = document.getElementById('blk-from').value, to = document.getElementById('blk-to').value;
+    const sid = document.getElementById('blk-site').value, op = document.getElementById('blk-op').value;
+    const n = state.shifts.filter(x => x.date >= from && x.date <= to && (!sid || x.siteId === sid)).length;
+    if (!n) { toast('対象データがありません', 'warn'); return; }
+    if (!confirm(`${n}件が対象です。実行しますか？`)) return;
+    toast(`✓ ${bulkUpdate(from, to, sid, op)}件を更新しました`);
+  }
+  else if (a === 'purge') {
+    const d = document.getElementById('del-before').value;
+    const n = state.shifts.filter(x => x.date < d).length;
+    if (!n) { toast('対象データがありません', 'warn'); return; }
+    if (!confirm(`${fmtMD(d)} より前の勤務データ ${n}件を削除します。元に戻せません。`)) return;
+    toast(`${purgeBefore(d)}件を削除しました`, 'warn');
+  }
   else if (a === 'open-shift') { ui.detailShift = t.dataset.shift; rerender(); }
   else if (a === 'close-shift') { ui.detailShift = null; rerender(); }
   else if (a === 'goto-board') { ui.boardDate = t.dataset.date; ui.detailShift = null; ui.adminTab = 'board'; rerender(); }
@@ -193,6 +238,15 @@ document.addEventListener('click', async e => {
     if (r === 'roster') printHTML(rosterHTML());
     else if (r === 'schedule') printHTML(scheduleHTML(ui.boardDate));
     else if (r === 'wage') printHTML(wageSheetHTML());
+    else if (r === 'workreport') printHTML(workReportHTML(ui.boardDate));
+    else if (r === 'bill-site') printHTML(billSheetHTML('site', ui.boardDate));
+    else if (r === 'bill-client') printHTML(billSheetHTML('client', ui.boardDate));
+    else if (r === 'deposit-list') printHTML(depositListHTML());
+    else if (r === 'paylist') printHTML(payListHTML(ui.payMonth));
+    else if (r === 'payslip-all') printHTML(payslipAllHTML(ui.payMonth));
+    else if (r === 'dm') printHTML(dmHTML());
+    else if (r === 'codebook') printHTML(codebookHTML());
+    else if (r === 'paid') printHTML(paidHTML());
     else if (r === 'invoice-menu') { ui.adminTab = 'billing'; rerender(); }
     else toast('この帳票はデモでは未実装です', 'warn');
   }
@@ -212,6 +266,13 @@ document.addEventListener('submit', e => {
 
 // 検索は打つそばから絞り込む（フォーカスとカーソル位置は維持する）
 document.addEventListener('input', e => {
+  if (e.target.id === 'master-q') {
+    ui.masterQ = e.target.value;
+    const pos = e.target.selectionStart; rerender();
+    const el2 = document.getElementById('master-q');
+    if (el2) { el2.focus(); el2.setSelectionRange(pos, pos); }
+    return;
+  }
   if (e.target.id !== 'gantt-q') return;
   ui.q = e.target.value;
   const pos = e.target.selectionStart;
@@ -221,6 +282,17 @@ document.addEventListener('input', e => {
 });
 
 document.addEventListener('change', e => {
+  const el = e.target, ac = el.dataset.actionChange;
+  if (el.dataset.mf !== undefined) {                       // マスタのセル編集
+    const mid = (findItem(ui.adminTab) || {}).master;
+    if (mid) { masterSet(mid, Number(el.dataset.i), el.dataset.mf, el.type === 'checkbox' ? el.checked : el.value); return; }
+  }
+  if (ac === 'order') { setOrder(ui.boardDate, el.dataset.site, Number(el.value) || 0); return; }
+  if (ac === 'punch-edit') { editPunch(el.dataset.shift, el.dataset.type, el.value); return; }
+  if (ac === 'allowance') { setAllowance(ui.payMonth || todayKey().slice(0, 7), el.dataset.g, el.dataset.k, Number(el.value) || 0); return; }
+  if (ac === 'bonus') { setBonus(el.dataset.g, Number(el.value) || 0); return; }
+  if (ac === 'option') { setOption(el.dataset.k, el.checked); return; }
+  if (el.id === 'ledger-client') { ui.ledgerClient = el.value; rerender(); return; }
   // 勤務ガントのフィルタ行
   if (e.target.id === 'gantt-from') { if (e.target.value) { ui.boardDate = e.target.value; rerender(); } }
   else if (e.target.id === 'gantt-unit') { ui.ganttUnit = e.target.value; rerender(); }
@@ -241,5 +313,40 @@ document.addEventListener('keydown', e => {
   }
 });
 
+setMastersRef(MASTERS);
 applyTheme();
 render();
+
+
+// ---- ファイル書き出し ----
+function download(name, text, mime) {
+  const blob = new Blob(['\ufeff' + text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+  toast(`\u2713 ${name} を書き出しました`);
+}
+function exportCsv(kind) {
+  const pick = {
+    guards: () => [Object.keys(state.guards[0]), ...state.guards.map(g => Object.values(g))],
+    sites: () => [Object.keys(state.sites[0]), ...state.sites.map(s => Object.values(s))],
+    shifts: () => [['date', 'siteId', 'guardId', 'start', 'end', 'punches'],
+      ...state.shifts.map(s => [s.date, s.siteId, s.guardId, s.start, s.end, s.punches.length])],
+    masters: () => { const o = [['master', 'row']]; Object.entries(state.masters).forEach(([k, v]) => v.forEach(r => o.push([k, JSON.stringify(r)]))); return o; },
+  }[kind];
+  if (!pick) return;
+  download(`${kind}.csv`, pick().map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n'), 'text/csv');
+}
+function masterSheetHTML(mid) {
+  const m = MASTERS[mid], rows = state.masters[mid] || [];
+  const v = (f, r) => f.t === 'chk' ? (r[f.k] ? '✓' : '') : (r[f.k] ?? '');
+  return `<div class="payslip">
+    <h1>${esc(m.name)}</h1>
+    <p class="ps-meta">${rows.length}件　／　GuardFlow警備株式会社（デモ）</p>
+    <table class="ps-table">
+      <tr>${m.fields.map(f => `<th>${esc(f.l)}</th>`).join('')}</tr>
+      ${rows.map(r => `<tr>${m.fields.map(f => `<td>${esc(v(f, r))}</td>`).join('')}</tr>`).join('')}
+    </table>
+    <p class="ps-foot">本帳票はデモデータにより自動生成されています。</p>
+  </div>`;
+}

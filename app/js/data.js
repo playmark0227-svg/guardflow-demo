@@ -1,4 +1,5 @@
 import { todayKey, addDays, fromKey, uid } from './util.js';
+import { seedMasters } from './masters.js';
 
 // デモ用シードデータ。日付は常に「今日」を基準に生成する
 export function seedData() {
@@ -131,5 +132,8 @@ export function seedData() {
   return {
     seedDate: D0, offline: false, guards, sites, shifts, education, notices, leaves,
     avail: {}, deposits: { s1: true, s2: true },
+    masters: seedMasters(),
+    orders: {}, allowances: {}, bonus: { date: D(20), name: '夏季賞与', amount: {} },
+    options: { nippoSplit: false, dayNight: true, taxIn: false, autoHour: true, blockPaid: true, warnRun: true },
   };
 }

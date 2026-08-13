@@ -1,5 +1,5 @@
 import { state } from './store.js';
-import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays } from './util.js';
+import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey } from './util.js';
 import { periodRows, ganttPeriod, visibleGuards, wageOf } from './gantt.js';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
@@ -161,4 +161,138 @@ export function scheduleHTML(date) {
     </table>
     <p class="ps-foot">本帳票はデモデータにより自動生成されています。</p>
   </div>`;
+}
+
+// ---- 実機メニューに対応する帳票群 ----
+const P = (title, meta, head, rows, foot) => `
+  <div class="payslip">
+    <h1>${title}</h1>
+    <p class="ps-meta">${meta}　／　GuardFlow警備株式会社（デモ）</p>
+    <table class="ps-table"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows}</table>
+    <p class="ps-foot">${foot || '本帳票はデモデータにより自動生成されています。'}</p>
+  </div>`;
+
+/** 勤務実績表（日付×隊員） */
+export function workReportHTML(date) {
+  const list = state.shifts.filter(s => s.date === date);
+  const rows = list.map(sh => {
+    const g = state.guards.find(x => x.id === sh.guardId);
+    const st = state.sites.find(x => x.id === sh.siteId);
+    const w = wageOf(sh, g);
+    return `<tr><td>${esc(g.code)}</td><td>${esc(g.name)}</td><td>${esc(st.name)}</td>
+      <td>${fmtAbs(w.s)}–${fmtAbs(w.e)}</td>
+      <td style="text-align:right">${hrs(w.workMin)}</td>
+      <td style="text-align:right">${w.nightMin ? hrs(w.nightMin) : '—'}</td>
+      <td style="text-align:right">${w.otMin ? hrs(w.otMin) : '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="7">対象データなし</td></tr>';
+  return P('勤 務 実 績 表', fmtMD(date), ['コード', '氏名', '配置先', '勤務時間', '実働(h)', '深夜(h)', '残業(h)'], rows);
+}
+
+/** 作業所別／得意先別 請求印刷 */
+export function billSheetHTML(by, date) {
+  const keyOf = st => by === 'client' ? st.client : st.name;
+  const map = new Map();
+  state.sites.forEach(st => {
+    const n = state.shifts.filter(s => s.date === date && s.siteId === st.id).length;
+    if (!n) return;
+    const amt = n * (shiftMinutes(st.start, st.end) / 60) * st.bill;
+    const k = keyOf(st);
+    map.set(k, (map.get(k) || 0) + amt);
+  });
+  let sum = 0;
+  const rows = [...map.entries()].map(([k, v]) => {
+    sum += v;
+    return `<tr><td>${esc(k)}</td><td style="text-align:right">${yen(v)}</td>
+      <td style="text-align:right">${yen(v * 0.1)}</td><td style="text-align:right">${yen(v * 1.1)}</td></tr>`;
+  }).join('') || '<tr><td colspan="4">対象データなし</td></tr>';
+  const total = `<tr class="ps-net"><td><b>合計</b></td><td style="text-align:right"><b>${yen(sum)}</b></td>
+    <td style="text-align:right"><b>${yen(sum * 0.1)}</b></td><td style="text-align:right"><b>${yen(sum * 1.1)}</b></td></tr>`;
+  return P(by === 'client' ? '得意先別 請求一覧' : '作業所別 請求一覧', fmtMD(date),
+    [by === 'client' ? '得意先' : '作業所', '請求額（税抜）', '消費税', '税込'], rows + total);
+}
+
+/** 入金一覧 */
+export function depositListHTML() {
+  let sum = 0;
+  const rows = state.sites.map(st => {
+    const n = state.shifts.filter(s => s.date === todayKey() && s.siteId === st.id).length;
+    const amt = Math.round(n * (shiftMinutes(st.start, st.end) / 60) * st.bill * 1.1);
+    if (!amt) return '';
+    const paid = !!state.deposits[st.id];
+    if (paid) sum += amt;
+    return `<tr><td>${esc(st.client)}</td><td>${esc(st.name)}</td>
+      <td style="text-align:right">${yen(amt)}</td><td>${paid ? '入金済' : '未入金'}</td></tr>`;
+  }).join('') || '<tr><td colspan="4">対象データなし</td></tr>';
+  return P('入 金 一 覧 表', fmtMD(todayKey()), ['得意先', '現場', '請求額（税込）', '状態'],
+    rows + `<tr class="ps-net"><td colspan="2"><b>入金済 合計</b></td><td style="text-align:right"><b>${yen(sum)}</b></td><td></td></tr>`);
+}
+
+/** 給与一覧帳票 */
+export function payListHTML(ym) {
+  let T = { gross: 0, ded: 0, net: 0 };
+  const rows = state.guards.map(g => {
+    const p = calcPay(g, ym);
+    T.gross += p.gross; T.ded += p.ded; T.net += p.net;
+    return `<tr><td>${esc(g.code)}</td><td>${esc(g.name)}</td>
+      <td style="text-align:right">${p.days}</td><td style="text-align:right">${hrs(p.hours * 60)}</td>
+      <td style="text-align:right">${yen(p.gross)}</td><td style="text-align:right">${yen(p.ded)}</td>
+      <td style="text-align:right">${yen(p.net)}</td></tr>`;
+  }).join('');
+  const m = calcPay(state.guards[0], ym).month;
+  return P('給 与 一 覧 表', m.replace('-', '年') + '月度',
+    ['コード', '氏名', '出勤', '実働(h)', '総支給', '控除計', '差引支給'],
+    rows + `<tr class="ps-net"><td colspan="4"><b>合計</b></td>
+      <td style="text-align:right"><b>${yen(T.gross)}</b></td>
+      <td style="text-align:right"><b>${yen(T.ded)}</b></td>
+      <td style="text-align:right"><b>${yen(T.net)}</b></td></tr>`);
+}
+
+/** 給与明細書（全員ぶんを連続印刷） */
+export function payslipAllHTML(ym) {
+  return state.guards.map(g => payslipPrintHTML(g, ym)).join('<div style="page-break-after:always"></div>');
+}
+
+/** DM印刷（得意先宛の宛名ラベル） */
+export function dmHTML() {
+  const seen = new Set();
+  const rows = state.sites.filter(s => !seen.has(s.client) && seen.add(s.client)).map(s =>
+    `<tr><td>${esc(s.addrFull ? s.addrFull.slice(0, 3) : '')}</td><td>${esc(s.addrFull || s.addr)}</td>
+     <td><b>${esc(s.client)}</b> 御中</td></tr>`).join('');
+  return P('D M 印 刷（宛名一覧）', `${seen.size}件`, ['都道府県', '住所', '宛名'], rows,
+    'フリガナ順（五十音）で出力されます。実機では郵便番号バーコードにも対応します。');
+}
+
+/** コードブック印刷（各マスタのコード一覧） */
+export function codebookHTML() {
+  const parts = Object.entries(MASTERS_REF()).map(([id, m]) => {
+    const rows = (state.masters[id] || []).slice(0, 12);
+    if (!rows.length) return '';
+    const f = m.fields.slice(0, 3);
+    return `<h2 class="cb-h">${esc(m.name)}</h2>
+      <table class="ps-table"><tr>${f.map(x => `<th>${esc(x.l)}</th>`).join('')}</tr>
+      ${rows.map(r => `<tr>${f.map(x => `<td>${esc(x.t === 'chk' ? (r[x.k] ? '✓' : '') : (r[x.k] ?? ''))}</td>`).join('')}</tr>`).join('')}</table>`;
+  }).join('');
+  return `<div class="payslip"><h1>コ ー ド ブ ッ ク</h1>
+    <p class="ps-meta">GuardFlow警備株式会社（デモ）</p>${parts}
+    <p class="ps-foot">各マスタの先頭12件を抜粋しています。</p></div>`;
+}
+let _M = null;
+export const setMastersRef = m => { _M = m; };
+const MASTERS_REF = () => _M || {};
+
+/** 有給関連印刷 */
+export function paidHTML() {
+  const grant = 14;
+  let T = 0;
+  const rows = state.guards.map(g => {
+    const used = state.leaves.filter(l => l.guardId === g.id && l.status === 'approved').length;
+    T += used;
+    const must = Math.max(0, 5 - used);
+    return `<tr><td>${esc(g.code)}</td><td>${esc(g.name)}</td><td>${esc(g.office)}</td>
+      <td style="text-align:right">${grant}</td><td style="text-align:right">${used}</td>
+      <td style="text-align:right">${grant - used}</td><td>${must ? `あと${must}日` : '達成'}</td></tr>`;
+  }).join('');
+  return P('年 次 有 給 休 暇 管 理 簿', fmtMD(todayKey()),
+    ['コード', '氏名', '拠点', '付与日数', '取得日数', '残日数', '年5日義務'], rows,
+    '労働基準法第39条第7項に基づく年5日の取得義務の管理簿です（労基則24条の7・3年保存）。');
 }

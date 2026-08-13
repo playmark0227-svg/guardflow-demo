@@ -2,6 +2,12 @@ import { state, ui } from './store.js';
 import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js';
 import { calcPay } from './prints.js';
 import { ganttView, wageOf } from './gantt.js';
+import { GROUPS, PINNED, findItem, findGroup } from './menu.js';
+import { MASTERS } from './masters.js';
+import {
+  groupView, masterView, orderView, actualView, allowanceView, bonusView,
+  zenginView, ledgerView, forecastView, paidView, maintView, masterPrintView,
+} from './screens.js';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -305,31 +311,6 @@ function reportsView() {
     <p class="pc-muted">帳票はボタン1つでPDF出力（ブラウザの印刷ダイアログが開きます）。</p>`;
 }
 
-// ================= マスタ管理 =================
-function masterView() {
-  return `
-    <div class="pc-pager"><b>隊員マスタ</b></div>
-    <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>コード</th><th>氏名</th><th class="num">年齢</th><th class="num">時給</th><th>資格</th><th>特記</th></tr></thead>
-      <tbody>${state.guards.map(g => `<tr>
-        <td>${esc(g.code)}</td><td><b>${esc(g.name)}</b></td><td class="num">${g.age}</td>
-        <td class="num">${yen(g.rate)}</td>
-        <td>${g.quals.length ? esc(g.quals.join('、')) : '—'}</td>
-        <td>${g.caution ? '⚠️ 注意喚起' : ''}${g.siteNG ? ' 🚫 出禁あり' : ''}${g.pairNG ? ' 👥 相性NG' : ''}${g.rookie ? ' 🔰 新任' : ''}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <div class="pc-pager"><b>現場マスタ</b></div>
-    <div class="pc-card pc-table-wrap"><table class="pc-table">
-      <thead><tr><th>名称</th><th>区分</th><th>時間</th><th class="num">必要人数</th><th class="num">請求単価</th><th>必置資格</th></tr></thead>
-      <tbody>${state.sites.map(s => `<tr>
-        <td><b>${esc(s.name)}</b><br><span class="pc-muted small">${esc(s.client)}</span></td>
-        <td>${s.kind}</td><td>${s.start}〜${s.end}${s.night ? ' 🌙' : ''}</td>
-        <td class="num">${s.need}名</td><td class="num">@${s.bill.toLocaleString()}</td>
-        <td>${s.reqQual ? esc(s.reqQual) : '—'}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-}
-
 // ================= 有休管理 =================
 function leaveAdminView() {
   const st = { pending: ['申請中', 'st-scheduled'], nego: ['交渉可', 'st-nego'], approved: ['承認済', 'st-onduty'], rejected: ['棄却', 'st-alert'] };
@@ -431,59 +412,164 @@ function msgView() {
 }
 
 // ================= シェル =================
-const MENU = [
-  ['dash', '🏠', 'ダッシュボード'],
-  ['board', '👥', '勤務管理'],
-  ['monitor', '📡', '上下番モニター'],
-  ['gantt', '📊', '勤務ガント'],
-  ['billing', '📄', '請求管理'],
-  ['deposit', '🏦', '入金管理'],
-  ['payroll', '💰', '給与管理'],
-  null,
-  ['reports', '🖨', '帳票管理'],
-  ['master', '📚', 'マスタ管理'],
-  ['leave', '✈️', '有休管理'],
-];
 const TITLES = {
   dash: 'ダッシュボード', board: '勤務管理（管制ボード）', monitor: '上下番モニター',
-  gantt: '勤務ガント / 時給計算',
-  billing: '請求管理', deposit: '入金管理', payroll: '給与管理', reports: '帳票管理',
-  master: 'マスタ管理', leave: '有休管理', edu: '教育管理', finance: '収支分析（経営モード）', msg: 'アプリ用伝言板',
+  gantt: '勤務ガント / 時給計算', billing: '請求集計・入力', deposit: '入金入力',
+  payroll: '給与集計・入力', reports: '帳票管理', master: 'マスタ一覧', leave: '休暇申請の承認',
+  edu: '教育管理', finance: '請求、給与実粗利確認表', msg: 'アプリ用伝言板',
+  order: '受注入力', actual: '勤務実績入力', 'actual-list': '勤務実績一覧入力',
+  'actual-site': '現場別 勤務実績一覧入力', 'actual-guard': '隊員別 勤務実績入力',
+  'actual-client': '得意先別 勤務実績入力', allowance: '手当・控除入力',
+  bonus: '賞与入力', 'bonus-list': '賞与一覧入力', zengin: '振込データ作成',
+  ledger: '得意先元帳', 'sales-forecast': '売上高予測表', 'pl-forecast': '収支予測表',
+  'bill-ref': '請求参照・更新', 'paid-sum': '有給集計', 'paid-guard': '隊員別 有給状況確認',
+  'paid-month': '付与月別 有給状況確認', 'maint-data': 'データメンテナンス', 'maint-del': 'データ削除',
+  'maint-zip': '郵便番号更新', 'maint-opt': 'オプション設定', 'maint-bulk': '勤務一括更新',
+  'maint-io': 'エクスポートインポート', 'rep-master': 'マスタ一覧印刷',
+  'm-client': '得意先マスタ', 'm-site': '配置先マスタ', 'm-guard': '隊員マスタ',
 };
 
-export function renderAdmin(el) {
-  const views = {
-    dash: dashView, board: boardView, monitor: monitorView, gantt: ganttView, billing: billingView,
-    deposit: depositView, payroll: payrollView, reports: reportsView, master: masterView,
-    leave: leaveAdminView, edu: eduView, finance: financeView, msg: msgView,
+/** 開いている画面のHTMLを返す */
+function contentFor() {
+  const tab = ui.adminTab;
+  const base = {
+    dash: dashView, board: boardView, monitor: monitorView, gantt: ganttView,
+    billing: billingView, deposit: depositView, payroll: payrollView, reports: reportsView,
+    master: masterListView, leave: leaveAdminView, edu: eduView, finance: financeView, msg: msgView,
   };
+  if (base[tab]) return base[tab]();
+
+  // メニューグループのタイル一覧
+  if (tab.startsWith('g-')) return groupView(tab);
+
+  // マスタ編集
+  const item = findItem(tab);
+  if (item && item.kind === 'master') return masterView(item.master);
+
+  const map = {
+    order: orderView,
+    actual: () => actualView('one'), 'actual-list': () => actualView('list'),
+    'actual-site': () => actualView('site'), 'actual-guard': () => actualView('guard'),
+    'actual-client': () => actualView('client'),
+    allowance: allowanceView, bonus: () => bonusView(false), 'bonus-list': () => bonusView(true),
+    zengin: zenginView, ledger: ledgerView,
+    'sales-forecast': () => forecastView('sales'), 'pl-forecast': () => forecastView('pl'),
+    'bill-ref': billingView,
+    'paid-sum': () => paidView('sum'), 'paid-guard': () => paidView('guard'), 'paid-month': () => paidView('month'),
+    'maint-data': () => maintView('data'), 'maint-del': () => maintView('del'), 'maint-zip': () => maintView('zip'),
+    'maint-opt': () => maintView('opt'), 'maint-bulk': () => maintView('bulk'), 'maint-io': () => maintView('io'),
+    'rep-master': masterPrintView,
+    'm-client': clientMasterView, 'm-site': siteMasterView, 'm-guard': guardMasterView,
+  };
+  if (map[tab]) return map[tab]();
+  return '<div class="pc-muted">画面が見つかりません</div>';
+}
+
+// 得意先・配置先・隊員は項目が多いので専用画面にする
+function clientMasterView() {
+  const clients = [...new Set(state.sites.map(s => s.client))];
+  return `
+    <div class="pc-pager"><b>得意先マスタ</b><span class="pc-muted small">${clients.length}件</span></div>
+    <div class="pc-card pc-table-wrap"><table class="pc-table">
+      <thead><tr><th>得意先名称</th><th class="num">現場数</th><th>締日</th><th>入金区分</th><th>課税方法</th><th class="num">当月請求</th></tr></thead>
+      <tbody>${clients.map(c => {
+        const ss = state.sites.filter(x => x.client === c);
+        const amt = ss.reduce((a, st) => {
+          const n = state.shifts.filter(x => x.date === ui.boardDate && x.siteId === st.id).length;
+          return a + n * (shiftMinutes(st.start, st.end) / 60) * st.bill;
+        }, 0);
+        return `<tr><td><b>${esc(c)}</b></td><td class="num">${ss.length}</td>
+          <td>月末締め</td><td>振込</td><td>外税</td><td class="num">${yen(amt)}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    <p class="pc-muted small">実機では得意先番号・フリガナ・敬称・請求日・入金予定日・請求書印刷銀行（最大3行）・CTI連携などを保持します。</p>`;
+}
+
+function siteMasterView() {
+  return `
+    <div class="pc-pager"><b>配置先マスタ</b><span class="pc-muted small">${state.sites.length}件</span>
+      <span style="margin-left:auto"></span>
+      <button class="pc-btn" data-action="atab" data-tab="m-siterate">配置先単価マスタへ →</button></div>
+    <div class="pc-card pc-table-wrap"><table class="pc-table">
+      <thead><tr><th>配置先名称 / 得意先</th><th>警備業区分</th><th>時間</th><th class="num">必要人数</th>
+        <th class="num">所定休憩</th><th class="num">請求単価</th><th>必置資格</th><th>現場住所</th></tr></thead>
+      <tbody>${state.sites.map(s => `<tr>
+        <td><b>${esc(s.name)}</b><br><span class="pc-muted small">${esc(s.client)}</span></td>
+        <td>${s.kind}</td><td>${s.start}〜${s.end}${s.night ? ' 🌙' : ''}</td>
+        <td class="num">${s.need}名</td><td class="num">${s.brk || 0}分</td>
+        <td class="num">@${s.bill.toLocaleString()}</td>
+        <td>${s.reqQual ? esc(s.reqQual) : '—'}</td>
+        <td class="small">${esc(s.addrFull || s.addr)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="pc-muted small">実機ではこのほか、現場監督名・現場TEL・建退共加入・無線機代・端数処理区分・固定追加請求・機械学習タブなどを保持します。</p>`;
+}
+
+function guardMasterView() {
+  return `
+    <div class="pc-pager"><b>隊員マスタ</b><span class="pc-muted small">${state.guards.length}名</span>
+      <span style="margin-left:auto"></span>
+      <button class="pc-btn" data-action="atab" data-tab="m-grate">隊員単価マスタへ →</button>
+      <button class="pc-btn" data-action="report-out" data-report="roster">🖨 警備員名簿</button></div>
+    <div class="pc-card pc-table-wrap"><table class="pc-table">
+      <thead><tr><th>コード</th><th>氏名</th><th>支店</th><th class="num">年齢</th><th class="num">時給</th>
+        <th>資格等</th><th>クレーム / 同配置NG</th></tr></thead>
+      <tbody>${state.guards.map(g => `<tr>
+        <td>${esc(g.code)}</td><td><b>${esc(g.name)}</b></td><td>${esc(g.office)}</td>
+        <td class="num">${g.age}</td><td class="num">${yen(g.rate)}</td>
+        <td>${g.quals.length ? esc(g.quals.join('、')) : '—'}</td>
+        <td class="small">${g.caution ? '⚠️ ' + esc(g.caution) : ''}${g.siteNG ? ' 🚫 出禁あり' : ''}${g.pairNG ? ' 👥 同配置NG' : ''}${g.rookie ? ' 🔰 新任' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="pc-muted small">実機の隊員マスタは 名簿情報／給与／振込情報・備考／住民税・固定支給・固定控除／資格手当設定／社会保険設定／クレーム／同配置NG／有給設定 のタブ構成です。</p>`;
+}
+
+function masterListView() {
+  return `
+    <div class="pc-pager"><b>マスタ一覧</b><span class="pc-muted small">全${Object.keys(MASTERS).length + 3}マスタ</span></div>
+    ${['g-master', 'g-master-bill', 'g-master-pay'].map(gid => {
+      const g = findGroup(gid);
+      return `<div class="pc-sec-head"><h2 style="font-size:15px;margin:0">${g.ic} ${esc(g.name)}</h2></div>${groupView(gid)}`;
+    }).join('')}`;
+}
+
+export function renderAdmin(el) {
   const pendingLv = state.leaves.filter(l => l.status === 'pending').length;
+  const cur = ui.adminTab;
+  const openG = GROUPS.find(g => g.id === cur || g.items.some(i => i.id === cur));
+
   el.innerHTML = `
   <div class="pc-shell">
     <aside class="pc-sidebar">
       <div class="pc-logo"><span class="pc-logo-b">GuardFlow</span><span class="pc-logo-r">警備</span></div>
       <nav class="pc-menu">
-        ${MENU.map(m => m === null ? '<hr class="pc-menu-hr">' : `
-          <button class="pc-menu-item ${ui.adminTab === m[0] ? 'on' : ''}" data-action="atab" data-tab="${m[0]}">
-            <span class="pc-menu-ic">${m[1]}</span>${m[2]}<span class="pc-menu-chev">›</span>
-          </button>`).join('')}
+        <div class="pc-menu-cap">よく使う</div>
+        ${PINNED.map(m => `<button class="pc-menu-item ${cur === m.id ? 'on' : ''}" data-action="atab" data-tab="${m.id}">
+          <span class="pc-menu-ic">${m.ic}</span>${m.name}</button>`).join('')}
+        <div class="pc-menu-cap">メインメニュー</div>
+        ${GROUPS.map(g => {
+          const open = openG && openG.id === g.id;
+          return `<button class="pc-menu-item pc-menu-g ${cur === g.id ? 'on' : ''}" data-action="atab" data-tab="${g.id}">
+            <span class="pc-menu-ic">${g.ic}</span>${g.name}<span class="pc-menu-chev">${open ? '⌄' : '›'}</span></button>
+          ${open ? `<div class="pc-submenu">${g.items.map(it =>
+            `<button class="pc-sub-item ${cur === it.id ? 'on' : ''}" data-action="atab" data-tab="${it.id}">${esc(it.name)}</button>`).join('')}</div>` : ''}`;
+        }).join('')}
       </nav>
       <div class="pc-sidebar-bottom">
         <button class="pc-navy-block" data-action="atab" data-tab="edu">教育管理 ↗</button>
-        <button class="pc-navy-block" data-action="atab" data-tab="finance">収支分析 ↗</button>
-        <div class="pc-company">GuardFlow警備株式会社（デモ）</div>
+        <div class="pc-company">${esc((state.masters.company[0] || {}).name || 'GuardFlow警備株式会社')}</div>
       </div>
     </aside>
     <div class="pc-main">
       <header class="pc-topbar">
-        <b class="pc-title">${TITLES[ui.adminTab]}</b>
+        <b class="pc-title">${esc(TITLES[cur] || (findItem(cur) || {}).name || (findGroup(cur) || {}).name || '')}</b>
         <span class="pc-topbar-right">
           <button class="pc-btn" data-action="atab" data-tab="msg">アプリ用伝言板</button>
           <button class="pc-bell" data-action="atab" data-tab="leave">🔔${pendingLv ? `<span class="pc-bell-badge">${pendingLv}</span>` : ''}</button>
           <button class="pc-btn pc-kebab">⋮</button>
         </span>
       </header>
-      <div class="pc-content">${views[ui.adminTab]()}</div>
+      <div class="pc-content">${contentFor()}</div>
     </div>
   </div>`;
 }
