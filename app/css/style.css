@@ -879,3 +879,19 @@ th.ded, td.ded { background: color-mix(in srgb, var(--red) 6%, transparent); }
 .g-blank p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .g-blank .g-btn-navy { width: auto; margin-top: 6px; padding: 11px 20px; }
 .g-blank-sub { font-size: 11.5px !important; }
+
+/* アプリ内の確認ダイアログ */
+.ask-back { position: fixed; inset: 0; background: rgba(16, 24, 40, .45); z-index: 200; }
+.ask {
+  position: fixed; z-index: 201; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(440px, 92vw); background: var(--card); color: var(--text);
+  border-radius: 8px; box-shadow: 0 16px 48px rgba(16, 24, 40, .3); padding: 22px 24px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ask b { font-size: 16.5px; }
+.ask p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
+.ask-sel { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--text); width: 100%; }
+.ask-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.ask-btns button { padding: 9px 18px; border-radius: 4px; font-weight: 700; }
+.ask-btns .pc-btn { border: 1px solid var(--line); }
+.pc-btn-danger { background: var(--red); color: #fff; }

@@ -1,9 +1,9 @@
-import { state, ui } from './store.js';
+import { state, ui } from './store.js?v=3';
 import {
   todayKey, addDays, fmtMD, esc, yen, parseHM, absMin, daysBetween,
   nightOverlap, nightBandsIn, subtractIntervals, fmtAbs, hrs, pad, fromKey,
   monthStart, daysInMonth, addMonths, fmtYM,
-} from './util.js';
+} from './util.js?v=3';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -229,7 +229,7 @@ function todayPanel() {
   const list = state.shifts
     .filter(sh => sh.date === date && ok.has(sh.guardId) && (!ui.ganttSite || sh.siteId === ui.ganttSite))
     .map(sh => ({ sh, g: guard(sh.guardId), st: site(sh.siteId), w: wageOf(sh) }))
-    .sort((a, b) => parseHM(a.sh.start) - parseHM(b.sh.start) || a.g.name.localeCompare(b.g.name, 'ja'));
+    .sort((a, b) => parseHM(a.sh.start) - parseHM(b.sh.start) || String(a.g.name || '').localeCompare(String(b.g.name || ''), 'ja'));
 
   const onLeave = state.leaves.filter(l => l.date === date && l.status === 'approved' && ok.has(l.guardId));
   const busy = new Set([...list.map(x => x.g.id), ...onLeave.map(l => l.guardId)]);
@@ -497,7 +497,7 @@ function hourGanttView() {
           `<span class="gt-act" role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" style="left:${x(offset + a)}%;width:${wpc(b - a)}%;background:${c}" title="${esc(tip)}"></span>`).join('');
         // ラベルは幅に余裕があるときだけ（週表示は潰れるので出さない）
         const label = !week && (w.planE - w.planS) / span > 0.12
-          ? `<span class="gt-label" style="left:${x(offset + w.planS)}%">${esc(st.name.slice(0, 12))}</span>` : '';
+          ? `<span class="gt-label" style="left:${x(offset + w.planS)}%">${esc(String(st.name || '').slice(0, 12))}</span>` : '';
         return plan + act + label;
       }).join('');
 

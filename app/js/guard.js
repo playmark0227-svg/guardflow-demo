@@ -1,6 +1,6 @@
-import { state, ui, queuedCount } from './store.js';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js';
-import { calcPay } from './prints.js';
+import { state, ui, queuedCount } from './store.js?v=3';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js?v=3';
+import { calcPay } from './prints.js?v=3';
 
 const site = id => state.sites.find(s => s.id === id);
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -95,7 +95,7 @@ function reportView(g) {
     const sel = ui.report.shiftId === sh.id;
     const pre = parseHM(sh.start) < 360;
     return `<button class="rep-shift ${sel ? 'sel' : ''}" data-action="rep-shift" data-shift="${sh.id}">
-      <span class="rep-shift-date"><b>${sh.date.replace(/-/g, '/')}</b><br><span class="rep-shift-time">${sh.start}〜${sh.end}</span></span>
+      <span class="rep-shift-date"><b>${String(sh.date || '').replace(/-/g, '/')}</b><br><span class="rep-shift-time">${sh.start}〜${sh.end}</span></span>
       <span class="rep-shift-name">${esc(s.name)}${pre ? '<br><span class="rep-pre">🌙 日跨ぎ夜勤・前夜出発可</span>' : ''}</span>
       <span class="rep-radio">${sel ? '✓' : ''}</span>
     </button>`;

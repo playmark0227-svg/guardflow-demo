@@ -1,6 +1,6 @@
-import { state, masterRows } from './store.js';
-import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js';
-import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js';
+import { state, masterRows } from './store.js?v=3';
+import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js?v=3';
+import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js?v=3';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
 // 実際の勤務データ（打刻）から、指定月の給与を組み立てる
@@ -15,18 +15,18 @@ export const co = () => state.masters.company[0] || {};
 const coName = () => co().name || '（自社マスタ未設定）';
 
 const rateOf = (name, key, fb) => {
-  const r = (state.masters.insurance || []).find(x => x.name.startsWith(name));
+  const r = (state.masters.insurance || []).find(x => String(x.name || '').startsWith(name));
   return r ? Number(r[key]) / 100 : fb;
 };
 /** 月額所得税マスタから税額を引く（社会保険料控除後の金額で判定） */
 export function incomeTax(afterIns) {
-  const t = (state.masters.taxMonthly || []).find(x => afterIns >= x.from && (!x.to || afterIns < x.to));
+  const t = (state.masters.taxMonthly || []).find(x => x.from != null && afterIns >= Number(x.from) && (!x.to || afterIns < Number(x.to)));
   return t ? Number(t.tax) : 0;
 };
 
 /** 日額所得税マスタ（丙欄）から税額を引く */
 export function dailyTax(afterInsPerDay) {
-  const t = (state.masters.taxDaily || []).find(x => afterInsPerDay >= x.from && (!x.to || afterInsPerDay < x.to));
+  const t = (state.masters.taxDaily || []).find(x => x.from != null && afterInsPerDay >= Number(x.from) && (!x.to || afterInsPerDay < Number(x.to)));
   return t ? Number(t.tax) : 0;
 }
 

@@ -1,21 +1,21 @@
 import {
   state, ui, subscribe, rerender, resetDemo, loadDemo, isDemo, setupSteps, punch, toggleOffline,
   checkAssign, assign, unassign, undoUnassign, addNotice, commit,
-  getSaveError, setWeather, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
+  getSaveError, setWeather, masterRows, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
   editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
-} from './store.js';
-import { renderGuard } from './guard.js';
-import { renderAdmin } from './admin.js';
+} from './store.js?v=3';
+import { renderGuard } from './guard.js?v=3';
+import { renderAdmin } from './admin.js?v=3';
 import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
   dmHTML, codebookHTML, paidHTML, setMastersRef, co,
   nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
-} from './prints.js';
-import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js';
-import { MASTERS } from './masters.js';
-import { findItem } from './menu.js';
-import { zenginRecords } from './screens.js';
+} from './prints.js?v=3';
+import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=3';
+import { MASTERS } from './masters.js?v=3';
+import { findItem } from './menu.js?v=3';
+import { zenginRecords } from './screens.js?v=3';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -79,6 +79,29 @@ function printHTML(html) {
 }
 
 // ---- レンダリング ----
+/** アプリ内の確認ダイアログ。ブラウザの confirm() はユーザーが
+ *  「このページでこれ以上ダイアログを表示しない」を選ぶと以後 false を返し続け、
+ *  ボタンを押しても何も起きない状態になるため使わない */
+let pendingAsk = null;
+function ask({ title, body, ok, danger, run }) {
+  pendingAsk = run;
+  ui.ask = { title, body, ok: ok || '実行する', danger: !!danger };
+  rerender();
+}
+function askView() {
+  const a = ui.ask;
+  if (!a) return '';
+  return `<div class="ask-back" data-action="ask-cancel"></div>
+    <div class="ask" role="dialog" aria-modal="true" aria-label="${esc(a.title)}">
+      <b>${esc(a.title)}</b>
+      <p>${a.body}</p>
+      <div class="ask-btns">
+        <button class="pc-btn" data-action="ask-cancel">キャンセル</button>
+        <button class="${a.danger ? 'pc-btn-danger' : 'pc-btn-navy'}" data-action="ask-ok">${esc(a.ok)}</button>
+      </div>
+    </div>`;
+}
+
 let lastSaveError = null;
 function render() {
   // 保存に失敗していたら必ず知らせる（黙って消えるのを防ぐ）
@@ -91,6 +114,9 @@ function render() {
   document.body.classList.toggle('pc-mode', ui.role === 'admin');
   if (ui.role === 'guard') renderGuard(el); else renderAdmin(el);
   bindDnD(el);
+  // 確認ダイアログはアプリ本体の外側に描く（画面の再描画で消えないように）
+  const ax = document.getElementById('ask-area');
+  if (ax) ax.innerHTML = askView();
 }
 subscribe(render);
 
@@ -122,14 +148,22 @@ document.addEventListener('click', async e => {
   if (a === 'role') { ui.role = t.dataset.role; rerender(); }
   else if (a === 'theme') { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; localStorage.setItem('gf-theme', theme); applyTheme(); }
   else if (a === 'reset') {
-    if (!confirm('登録した内容をすべて消して、契約直後の初期状態に戻します。よろしいですか？')) return;
-    resetDemo(); toast('初期状態に戻しました');
+    ask({ title: '契約直後の初期状態に戻しますか？', danger: true, ok: '初期状態に戻す',
+      body: '登録した得意先・配置先・隊員・勤務データがすべて消えます。<br>元に戻せません。',
+      run: () => { resetDemo(); toast('初期状態に戻しました'); } });
   }
   else if (a === 'load-demo') {
-    if (!confirm('デモ用のサンプルデータ（隊員12名・現場6件・3週間分の勤務）を入れます。\n' +
-      'いま登録している内容は置き換わります。よろしいですか？')) return;
-    loadDemo(); toast('デモデータを入れました');
+    ask({ title: 'デモ用のサンプルデータを入れますか？', ok: 'デモデータを入れる',
+      body: '隊員12名・得意先5社・現場6件・3週間分の勤務と打刻が入ります。<br>'
+        + 'いま登録している内容は置き換わります。',
+      run: () => { loadDemo(); toast('デモデータを入れました'); } });
   }
+  else if (a === 'ask-ok') {
+    const run = pendingAsk, box = document.querySelector('.ask');   // 消す前に入力値を読めるようにする
+    pendingAsk = null; ui.ask = null;
+    if (run) run(box); else rerender();
+  }
+  else if (a === 'ask-cancel') { pendingAsk = null; ui.ask = null; rerender(); }
   else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; ui.noticeId = null; rerender(); }
   else if (a === 'notice-open') { ui.noticeId = t.dataset.id; rerender(); }
   else if (a === 'notice-back') { ui.noticeId = null; rerender(); }
@@ -194,9 +228,11 @@ document.addEventListener('click', async e => {
   else if (a === 'open-item') { ui.adminTab = t.dataset.item; ui.masterQ = ''; rerender(); }
   else if (a === 'master-add') { masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
   else if (a === 'master-del') {
-    if (!confirm('この行を削除します。よろしいですか？')) return;
-    const err = masterDel(t.dataset.m, Number(t.dataset.i));
-    toast(err ? '⚠ ' + err : '削除しました', err ? 'danger' : 'ok');
+    const m = t.dataset.m, i = Number(t.dataset.i);
+    const row = masterRows(m)[i] || {};
+    ask({ title: 'この行を削除しますか？', danger: true, ok: '削除する',
+      body: esc(row.name || row.code || '選択した行') + ' を削除します。元に戻せません。',
+      run: () => { const err = masterDel(m, i); toast(err ? '⚠ ' + err : '削除しました', err ? 'danger' : 'ok'); } });
   }
   else if (a === 'master-bulk') {
     const add = [['160-0022', '東京都新宿区新宿'], ['100-0005', '東京都千代田区丸の内'], ['150-0043', '東京都渋谷区道玄坂'],
@@ -218,27 +254,36 @@ document.addEventListener('click', async e => {
     const sid = document.getElementById('blk-site').value, op = document.getElementById('blk-op').value;
     const n = state.shifts.filter(x => x.date >= from && x.date <= to && (!sid || x.siteId === sid)).length;
     if (!n) { toast('対象データがありません', 'warn'); return; }
-    if (!confirm(`${n}件が対象です。実行しますか？`)) return;
-    toast(`✓ ${bulkUpdate(from, to, sid, op)}件を更新しました`);
+    ask({ title: '勤務データを一括更新しますか？', danger: true, ok: `${n}件を更新する`,
+      body: `${fmtMD(from)} 〜 ${fmtMD(to)} の <b>${n}件</b> が対象です。<br>`
+        + (op === 'unassign' ? '配置ごと削除します。元に戻せません。' : '打刻を消去します。元に戻せません。'),
+      run: () => toast(`✓ ${bulkUpdate(from, to, sid, op)}件を更新しました`) });
   }
   else if (a === 'purge') {
     const d = document.getElementById('del-before').value;
     const n = state.shifts.filter(x => x.date < d).length;
     if (!n) { toast('対象データがありません', 'warn'); return; }
-    if (!confirm(`${fmtMD(d)} より前の勤務データ ${n}件を削除します。元に戻せません。`)) return;
-    toast(`${purgeBefore(d)}件を削除しました`, 'warn');
+    ask({ title: '古い勤務データを削除しますか？', danger: true, ok: `${n}件を削除する`,
+      body: `${fmtMD(d)} より前の勤務データ <b>${n}件</b> を削除します。<br>`
+        + '打刻・賃金の履歴も一緒に消え、元に戻せません。',
+      run: () => toast(`${purgeBefore(d)}件を削除しました`, 'warn') });
   }
   else if (a === 'open-shift') { ui.detailShift = t.dataset.shift; rerender(); }
   else if (a === 'close-shift') { ui.detailShift = null; rerender(); }
   else if (a === 'goto-board') { ui.boardDate = t.dataset.date; ui.detailShift = null; ui.adminTab = 'board'; rerender(); }
   else if (a === 'remove-shift') {
-    const sh = state.shifts.find(x => x.id === t.dataset.shift);
-    if (sh && sh.punches.length &&
-        !confirm(`この勤務には打刻が${sh.punches.length}件あります。外すと実績も一緒に消えます。よろしいですか？`)) return;
-    ui.detailShift = null;
-    if (unassign(t.dataset.shift)) {
-      toast('配置を解除しました', 'ok', { label: '元に戻す', run: () => { undoUnassign(); toast('✓ 配置を戻しました'); } });
-    }
+    const id = t.dataset.shift;
+    const sh = state.shifts.find(x => x.id === id);
+    const drop = () => {
+      ui.detailShift = null;
+      if (unassign(id))
+        toast('配置を解除しました', 'ok', { label: '元に戻す', run: () => { undoUnassign(); toast('✓ 配置を戻しました'); } });
+    };
+    // 打刻が無ければ確認は挟まない（「元に戻す」で取り消せるため）
+    if (sh && sh.punches.length)
+      ask({ title: 'この配置を外しますか？', danger: true, ok: '外す',
+        body: `この勤務には打刻が <b>${sh.punches.length}件</b> あります。外すと実績も一緒に消えます。`, run: drop });
+    else drop();
   }
   else if (a === 'leave') {
     setLeave(t.dataset.id, t.dataset.st);
@@ -267,10 +312,15 @@ document.addEventListener('click', async e => {
     else if (r === 'edu-sheet') printHTML(eduSheetHTML());
     else if (r === 'chingin') printHTML(chinginHTML(ui.payMonth));
     else if (r === 'contract') {
-      const id = prompt('警備契約書を出力する配置先を選んでください。\n' +
-        state.sites.map((s2, i) => `${i + 1}. ${s2.name}`).join('\n'), '1');
-      const st = state.sites[Number(id) - 1];
-      if (st) printHTML(contractHTML(st.id)); else toast('配置先を選んでください', 'warn');
+      if (!state.sites.length) { toast('先に配置先を登録してください', 'warn'); ui.adminTab = 'm-site'; rerender(); return; }
+      if (state.sites.length === 1) { printHTML(contractHTML(state.sites[0].id)); return; }
+      ask({ title: 'どの配置先の警備契約書を出力しますか？', ok: '選んだ配置先で出力',
+        body: `<select id="ask-site" class="ask-sel">${state.sites.map(x =>
+          `<option value="${esc(x.id)}">${esc(x.name)}（${esc(x.client || '得意先未設定')}）</option>`).join('')}</select>`,
+        run: box => {
+          const sel = box && box.querySelector('#ask-site');
+          printHTML(contractHTML(sel ? sel.value : state.sites[0].id));
+        } });
     }
     else if (r === 'invoice-menu') { ui.adminTab = 'billing'; rerender(); }
     else toast('この帳票はデモでは未実装です', 'warn');

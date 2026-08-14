@@ -1,6 +1,6 @@
-import { seedData, emptyData, demoData } from './data.js';
-import { seedMasters, MASTERS } from './masters.js';
-import { toKey, todayKey, uid } from './util.js';
+import { seedData, emptyData, demoData } from './data.js?v=3';
+import { seedMasters, MASTERS } from './masters.js?v=3';
+import { toKey, todayKey, uid } from './util.js?v=3';
 
 // 保存キー。データの形を変えたら上げる。
 // 古い端末に残ったデモデータで初期状態が見えなくなるのを防ぐ

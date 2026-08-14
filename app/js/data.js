@@ -1,5 +1,5 @@
-import { todayKey, addDays, fromKey, uid } from './util.js';
-import { seedMasters } from './masters.js';
+import { todayKey, addDays, fromKey, uid } from './util.js?v=3';
+import { seedMasters } from './masters.js?v=3';
 
 // デモ用データ。日付は常に「今日」を基準に生成する
 export function demoData() {
@@ -177,7 +177,7 @@ export function emptyData() {
   // 週締めの支払日は自社の資金繰り。締め名称と締め曜日（週40h超の起算）は残す
   (m.weekClose || []).forEach(r => { r.payDay = ''; });
   // 協会けんぽの料率は都道府県別。県名を外して、自県の率に直してもらう
-  (m.insurance || []).forEach(r => { r.name = r.name.replace(/（.*?）/, ''); });
+  (m.insurance || []).forEach(r => { r.name = String(r.name || '').replace(/（.*?）/, ''); });
   return {
     seedDate: todayKey(), offline: false, demo: false,
     clients: [], guards: [], sites: [], shifts: [], education: [], notices: [], leaves: [],
