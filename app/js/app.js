@@ -1,18 +1,19 @@
 import {
   state, ui, subscribe, rerender, resetDemo, loadDemo, isDemo, setupSteps, punch, toggleOffline, checkAssign, assign, unassign, undoUnassign, addNotice, commit, getSaveError, setWeather, masterRows, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus, editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit, addLeave,
-} from './store.js?v=9';
-import { renderGuard } from './guard.js?v=9';
-import { renderAdmin, leaveForm } from './admin.js?v=9';
+} from './store.js?v=11';
+import { renderGuard } from './guard.js?v=11';
+import { renderAdmin, leaveForm } from './admin.js?v=11';
+import { assignForm, ganttPeriod } from './gantt.js?v=11';
 import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
   dmHTML, codebookHTML, paidHTML, setMastersRef, co,
   nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
-} from './prints.js?v=9';
-import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=9';
-import { MASTERS, masterIdOf } from './masters.js?v=9';
-import { findItem, GROUPS } from './menu.js?v=9';
-import { zenginRecords, quickForm, quickSave, quickRead } from './screens.js?v=9';
+} from './prints.js?v=11';
+import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=11';
+import { MASTERS, masterIdOf } from './masters.js?v=11';
+import { findItem, GROUPS } from './menu.js?v=11';
+import { zenginRecords, quickForm, quickSave, quickRead } from './screens.js?v=11';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -196,9 +197,10 @@ document.addEventListener('click', async e => {
   else if (a === 'atab') { ui.adminTab = t.dataset.tab; if (t.dataset.date) ui.boardDate = t.dataset.date; rerender(); }
   else if (a === 'gantt-nav') {
     const dir = Number(t.dataset.dir);
+    const unit = ganttPeriod().unit;                 // 表示範囲ぶんだけ送る
     if (dir === 0) ui.boardDate = todayKey();
-    else if (ui.ganttUnit === 'month') ui.boardDate = addMonths(ui.boardDate, dir);
-    else ui.boardDate = addDays(ui.boardDate, dir * (ui.ganttUnit === 'hour' ? 1 : 7));
+    else if (unit === 'month') ui.boardDate = addMonths(ui.boardDate, dir);
+    else ui.boardDate = addDays(ui.boardDate, dir * (unit === 'day' ? 1 : 7));
     rerender();
   }
   else if (a === 'board-date') {
@@ -265,6 +267,37 @@ document.addEventListener('click', async e => {
         const v = row.name || row.code || '';
         toast(`✓ ${v} を登録しました。続けて入力してください`);
         openQuick(omid, { prefill: { ...keep, [k]: v } });
+      },
+    });
+  }
+  else if (a === 'gantt-unit') { ui.ganttUnit = t.dataset.unit; rerender(); }
+  // ガントの空き枠をクリック → その隊員・その日に配置する
+  else if (a === 'gantt-add') {
+    const gid = t.dataset.g, date = t.dataset.d;
+    if (!state.sites.length) {
+      toast('先に配置先を登録してください', 'warn');
+      openQuick(state.clients.length ? 'siteM' : 'client');
+      return;
+    }
+    const g = state.guards.find(x => x.id === gid) || {};
+    ask({
+      title: `${g.name || ''}さんの勤務を追加`, ok: '配置する',
+      body: assignForm(gid, date)
+        + '<p class="qf-note">配置先を選ぶと所定の時間が入ります。ここで変えた時間はこの1件にだけ効きます。</p>',
+      run: box => {
+        const d = box.querySelector('#as-date').value;
+        const siteId = box.querySelector('#as-site').value;
+        if (!d || !siteId) { toast('⚠ 日付と配置先を選んでください', 'warn'); return false; }
+        const chk = checkAssign(d, siteId, gid);
+        if (chk.block) { toast('🚫 ' + chk.block, 'danger'); return false; }
+        assign(d, siteId, gid, box.querySelector('#as-work').value || undefined);
+        const sh = state.shifts[state.shifts.length - 1];
+        sh.start = box.querySelector('#as-start').value || sh.start;
+        sh.end = box.querySelector('#as-end').value || sh.end;
+        commit();
+        if (chk.warn) toast('⚠️ 注意喚起つきで配置しました：' + chk.warn, 'warn');
+        else toast(`✓ ${fmtMD(d)} に配置しました`, 'ok',
+          { label: '取り消す', run: () => { unassign(sh.id); toast('配置を取り消しました'); } });
       },
     });
   }
@@ -441,7 +474,6 @@ document.addEventListener('change', e => {
   if (el.id === 'ledger-client') { ui.ledgerClient = el.value; rerender(); return; }
   // 勤務ガントのフィルタ行
   if (e.target.id === 'gantt-from') { if (e.target.value) { ui.boardDate = e.target.value; rerender(); } }
-  else if (e.target.id === 'gantt-unit') { ui.ganttUnit = e.target.value; rerender(); }
   else if (e.target.id === 'gantt-office') { ui.ganttOffice = e.target.value; rerender(); }
   else if (e.target.id === 'gantt-site') { ui.ganttSite = e.target.value; rerender(); }
   else if (e.target.id === 'guard-switch') { ui.guardId = e.target.value; ui.shiftDetail = null; rerender(); }

@@ -1,9 +1,9 @@
-import { state, ui } from './store.js?v=9';
+import { state, ui } from './store.js?v=11';
 import {
   todayKey, addDays, fmtMD, esc, yen, parseHM, absMin, daysBetween,
   nightOverlap, nightBandsIn, subtractIntervals, fmtAbs, hrs, pad, fromKey,
   monthStart, daysInMonth, addMonths, fmtYM,
-} from './util.js?v=9';
+} from './util.js?v=11';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -146,16 +146,37 @@ export function wageOf(sh, g = guard(sh.guardId)) {
     base, otPay, nightPay, holPay, total: base + otPay + nightPay + holPay };
 }
 
-/** 表示単位。day14/day7 は日単位ボード、hour は1日の時間軸ガント */
+/** ガントから直接1件配置するためのフォーム。現場を選ぶと所定時間が入る */
+export function assignForm(guardId, date) {
+  const g = guard(guardId) || {};
+  const sites = state.sites;
+  const st = sites[0] || {};
+  return `<div class="qf" data-qm="__assign">
+    <label class="qf-row"><span>隊員</span><input type="text" value="${esc(g.name || '')}" disabled></label>
+    <label class="qf-row"><span>日付</span><input type="date" id="as-date" value="${esc(date)}"></label>
+    <label class="qf-row"><span>配置先<i>必須</i></span>
+      <select id="as-site">${sites.map(x =>
+        `<option value="${x.id}" data-s="${x.start}" data-e="${x.end}">${esc(x.name)}（${x.start}〜${x.end}）</option>`).join('')}</select></label>
+    <label class="qf-row"><span>開始</span><input type="time" id="as-start" value="${esc(st.start || '08:00')}"></label>
+    <label class="qf-row"><span>終了</span><input type="time" id="as-end" value="${esc(st.end || '17:00')}"></label>
+    <label class="qf-row"><span>勤務種別</span>
+      <select id="as-work"><option value=""></option>${(state.masters.work || []).map(x =>
+        `<option ${x.name === st.work ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+  </div>`;
+}
+
+/** 表示範囲。狭いほど細かく出す。
+ *  日＝1日を時間軸で（上下番・休憩・深夜帯まで）／週＝7日を現場名と時間帯つきで／月＝1か月を記号で */
 export const UNITS = {
-  month: { label: '月単位（1か月）' },
-  day14: { label: '日単位（14日間）', days: 14 },
-  day7: { label: '日単位（7日間）', days: 7 },
-  hour: { label: '時間単位（1日）', days: 1 },
+  day: { label: '日', sub: '1日を時間軸で', days: 1 },
+  week: { label: '週', sub: '7日間', days: 7 },
+  month: { label: '月', sub: '1か月' },
 };
+const LEGACY = { hour: 'day', day7: 'week', day14: 'week' };   // 以前の保存値を読み替える
 
 export function ganttPeriod() {
-  const unit = UNITS[ui.ganttUnit] ? ui.ganttUnit : 'day14';
+  const raw = LEGACY[ui.ganttUnit] || ui.ganttUnit;
+  const unit = UNITS[raw] ? raw : 'week';
   if (unit === 'month') {
     const from = monthStart(ui.boardDate);
     return { from, days: daysInMonth(ui.boardDate), unit, week: true };
@@ -358,9 +379,15 @@ function dayBoardView() {
       const list = byGuard.get(g.id) || [];
       const sm = summarize(list, dates);
 
+      // 空いている日はクリックでその場に配置できる（マスタや管制ボードへ戻らせない）
+      const busy = new Set(list.map(({ sh }) => sh.date));
+      const onLeave = leaveOf.get(g.id) || new Set();
       const bg = dates.map(d => {
         const w = fromKey(d).getDay();
-        return `<div class="dg-c ${d === D0 ? 'dg-today' : ''} ${w === 0 ? 'dg-sun' : w === 6 ? 'dg-sat' : ''}"></div>`;
+        const free = !busy.has(d) && !onLeave.has(d);
+        return `<div class="dg-c ${d === D0 ? 'dg-today' : ''} ${w === 0 ? 'dg-sun' : w === 6 ? 'dg-sat' : ''}${free ? ' dg-free' : ''}"
+          ${free ? `role="button" tabindex="0" data-action="gantt-add" data-g="${g.id}" data-d="${d}"
+            title="${esc(g.name)} を ${fmtMD(d)} に配置する"` : ''}>${free ? '<span class="dg-plus">＋</span>' : ''}</div>`;
       }).join('');
 
       // 休暇バー（配置より先に敷く）
@@ -381,8 +408,16 @@ function dayBoardView() {
           + (w.otMin ? ` / 残業 ${hrs(w.otMin)}h` : '')
           + `\n賃金 ${yen(w.total)}`
           + (w.flags.length ? `\n⚠ ${w.flags.join(' / ')}` : '');
-        return `<span class="dg-bar ${cls}" style="grid-column:${col}/span ${span};--c:${siteColor(sh.siteId)}"
-          role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" title="${esc(tip)}\nクリックで詳細">${compact ? esc(st.mark || '●') : `${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}`}</span>`;
+        // 表示範囲が狭いほど中身を詳しく出す
+        const inner = compact
+          ? esc(st.mark || '●')
+          : unit === 'week'
+            ? `<b>${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}</b>`
+              + `<span class="dg-bar-sub">${sh.start}–${sh.end}　実働${hrs(w.workMin)}h</span>`
+            : `${w.flags.length ? '⚠ ' : ''}${esc(st.abbr || st.name)}${st.night ? ' 🌙' : ''}`;
+        return `<span class="dg-bar ${cls}${unit === 'week' ? ' dg-bar-lg' : ''}"
+          style="grid-column:${col}/span ${span};--c:${siteColor(sh.siteId)}"
+          role="button" tabindex="0" data-action="open-shift" data-shift="${sh.id}" title="${esc(tip)}\nクリックで詳細">${inner}</span>`;
       }).join('');
 
       const over = state.options.warnRun && sm.maxRun >= 6;
@@ -425,9 +460,9 @@ function dayBoardView() {
 }
 
 export function ganttView() {
-  // 日単位（14日/7日）は参照UIと同じ日ボード、時間単位は1日の時間軸ガント
-  if (ganttPeriod().unit !== 'hour') return dayBoardView() + wageTable() + shiftSheet();
-  return hourGanttView() + wageTable() + shiftSheet();
+  // 日＝1日の時間軸ガント（最も細かい）、週・月＝日単位のボード
+  if (ganttPeriod().unit === 'day') return hourGanttView() + wageTable() + shiftSheet();
+  return dayBoardView() + wageTable() + shiftSheet();
 }
 
 /** 1日ぶんの時間軸ガント（予定と実働を上下に重ねて予実比較する） */
@@ -468,10 +503,10 @@ function hourGanttView() {
     `<span class="gt-dayline" style="left:${x(i * 1440)}%"></span>`).join('');
 
   // 隊員行
+  // 勤務が無い隊員も出す。空きレーンをクリックしてその場で配置できるようにするため
   const rows = visibleGuards()
-    .filter(g => byGuard.has(g.id))
     .map(g => {
-      const list = byGuard.get(g.id);
+      const list = byGuard.get(g.id) || [];
       const sum = list.reduce((a, { w }) => ({
         work: a.work + w.workMin, night: a.night + w.nightMin,
         ot: a.ot + w.otMin, pay: a.pay + w.total,
@@ -506,7 +541,10 @@ function hourGanttView() {
           <b>${esc(g.name)}</b>
           <span class="gt-sub">${yen(g.rate)}/h ・ 実働 ${hrs(sum.work)}h</span>
         </div>
-        <div class="gt-lane" style="min-width:${MIN_LANE[week ? 'week' : 'day']}px">${nightBg}${dayLines}${bars}</div>
+        <div class="gt-lane${list.length ? '' : ' gt-lane-free'}" style="min-width:${MIN_LANE[week ? 'week' : 'day']}px"
+          ${list.length ? '' : `role="button" tabindex="0" data-action="gantt-add" data-g="${g.id}" data-d="${dates[0]}"
+            title="${esc(g.name)} を ${fmtMD(dates[0])} に配置する"`}>${nightBg}${dayLines}${bars}${
+          list.length ? '' : '<span class="gt-lane-add">＋ この日の勤務を追加</span>'}</div>
         <div class="gt-total">${yen(sum.pay)}</div>
       </div>`;
     }).join('');
@@ -541,14 +579,13 @@ function toolbar() {
   const { from, days, unit } = ganttPeriod();
   const offices = [...new Set(state.guards.map(g => g.office))];
   return `<div class="dg-toolbar">
-    <label>${unit === 'month' ? '基準日' : '表示開始日'}
+    <label>${unit === 'month' ? '基準日' : unit === 'day' ? '表示する日' : '週の開始日'}
       <input type="date" id="gantt-from" value="${ui.boardDate}">
     </label>
-    <label>表示単位
-      <select id="gantt-unit">
-        ${Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k === unit ? 'selected' : ''}>${v.label}</option>`).join('')}
-      </select>
-    </label>
+    <span class="dg-units" role="group" aria-label="表示範囲">
+      ${Object.entries(UNITS).map(([k, v]) => `<button class="dg-unit ${k === unit ? 'on' : ''}"
+        data-action="gantt-unit" data-unit="${k}" title="${esc(v.sub)}">${esc(v.label)}</button>`).join('')}
+    </span>
     <label>隊員をさがす
       <input type="search" id="gantt-q" value="${esc(ui.q || '')}" placeholder="名前・コード・資格">
     </label>

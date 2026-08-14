@@ -1,13 +1,13 @@
-import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=9';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=9';
-import { calcPay } from './prints.js?v=9';
-import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=9';
-import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=9';
-import { MASTERS } from './masters.js?v=9';
+import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=11';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=11';
+import { calcPay } from './prints.js?v=11';
+import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=11';
+import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=11';
+import { MASTERS } from './masters.js?v=11';
 import {
   groupView, masterView, orderView, actualView, allowanceView, bonusView,
   zenginView, ledgerView, forecastView, paidView, maintView, masterPrintView,
-} from './screens.js?v=9';
+} from './screens.js?v=11';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);

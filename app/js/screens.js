@@ -1,10 +1,10 @@
-import { state, ui, commit, paidGrantOf, masterRows, masterAdd, masterSet, defaultsFor } from './store.js?v=9';
-import { blank } from './admin.js?v=9';
-import { MASTERS, masterIdOf } from './masters.js?v=9';
-import { GROUPS, findGroup } from './menu.js?v=9';
-import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=9';
-import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=9';
-import { co } from './prints.js?v=9';
+import { state, ui, commit, paidGrantOf, masterRows, masterAdd, masterSet, defaultsFor } from './store.js?v=11';
+import { blank } from './admin.js?v=11';
+import { MASTERS, masterIdOf } from './masters.js?v=11';
+import { GROUPS, findGroup } from './menu.js?v=11';
+import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=11';
+import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=11';
+import { co } from './prints.js?v=11';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
