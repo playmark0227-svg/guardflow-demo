@@ -1,6 +1,6 @@
-import { seedData, emptyData, demoData } from './data.js?v=3';
-import { seedMasters, MASTERS } from './masters.js?v=3';
-import { toKey, todayKey, uid } from './util.js?v=3';
+import { seedData, emptyData, demoData } from './data.js?v=7';
+import { seedMasters, MASTERS } from './masters.js?v=7';
+import { toKey, todayKey, uid } from './util.js?v=7';
 
 // 保存キー。データの形を変えたら上げる。
 // 古い端末に残ったデモデータで初期状態が見えなくなるのを防ぐ
@@ -265,7 +265,8 @@ export function masterAdd(mid) {
   commit();
 }
 /** 業務データは空だと他画面が落ちるので、最低限の初期値を入れて追加する */
-function defaultsFor(m) {
+export function defaultsFor(mid) {
+  const m = typeof mid === 'string' ? (MASTERS[mid] || {}) : mid;
   if (m.store === 'sites') return {
     name: '（新しい配置先）', start: '08:00', end: '17:00', brk: 60, need: 1, bill: 0, mark: '新',
     client: (state.clients[0] || {}).name || '',

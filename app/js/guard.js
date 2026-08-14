@@ -1,6 +1,6 @@
-import { state, ui, queuedCount } from './store.js?v=3';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js?v=3';
-import { calcPay } from './prints.js?v=3';
+import { state, ui, queuedCount } from './store.js?v=7';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js?v=7';
+import { calcPay } from './prints.js?v=7';
 
 const site = id => state.sites.find(s => s.id === id);
 const WD = ['日', '月', '火', '水', '木', '金', '土'];

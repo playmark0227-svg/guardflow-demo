@@ -1,6 +1,6 @@
-import { state, masterRows } from './store.js?v=3';
-import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js?v=3';
-import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js?v=3';
+import { state, masterRows } from './store.js?v=7';
+import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js?v=7';
+import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js?v=7';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
 // 実際の勤務データ（打刻）から、指定月の給与を組み立てる
@@ -236,7 +236,7 @@ export function rosterHTML() {
     <table class="ps-table">
       <tr><th>隊員コード</th><th>氏名</th><th>年齢</th><th>保有資格</th></tr>
       ${state.guards.map(g => `<tr>
-        <td>${esc(g.code)}</td><td>${esc(g.name)}</td><td style="text-align:right">${g.age}</td>
+        <td>${esc(g.code)}</td><td>${esc(g.name)}</td><td style="text-align:right">${g.age ?? '—'}</td>
         <td>${g.quals.length ? esc(g.quals.join('、')) : '—'}</td>
       </tr>`).join('')}
     </table>

@@ -1,13 +1,13 @@
-import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=3';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=3';
-import { calcPay } from './prints.js?v=3';
-import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=3';
-import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=3';
-import { MASTERS } from './masters.js?v=3';
+import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=7';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=7';
+import { calcPay } from './prints.js?v=7';
+import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=7';
+import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=7';
+import { MASTERS } from './masters.js?v=7';
 import {
   groupView, masterView, orderView, actualView, allowanceView, bonusView,
   zenginView, ledgerView, forecastView, paidView, maintView, masterPrintView,
-} from './screens.js?v=3';
+} from './screens.js?v=7';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -167,12 +167,12 @@ function boardView() {
     return blank('📍', '配置先がまだ登録されていません',
       '管制ボードは「どの現場に、誰を置くか」を決める画面です。<br>'
       + 'まず発注元となる<b>得意先</b>を登録し、そのうえで現場（配置先）を追加してください。',
-      state.clients.length ? ['m-site', '配置先を登録する →'] : ['m-client', '得意先の登録から始める →']);
+      state.clients.length ? { m: 'siteM', label: '＋ 配置先を追加' } : { m: 'client', label: '＋ 得意先を追加' });
   if (!state.guards.length)
     return blank('👥', '隊員がまだ登録されていません',
       '配置先は ' + state.sites.length + ' 件登録済みです。あとは配置する隊員を登録すれば、<br>'
       + 'ここでドラッグ&ドロップして勤務予定を組めるようになります。',
-      ['m-guard', '隊員を登録する →']);
+      { m: 'guardM', label: '＋ 隊員を追加' });
   const date = ui.boardDate;
   const shifts = dayShifts(date);
   const assignedIds = new Set(shifts.map(s => s.guardId));
@@ -181,13 +181,18 @@ function boardView() {
   const chips = free.map(g => `
     <button class="gchip ${ui.selectedGuard === g.id ? 'gchip-on' : ''}" draggable="true"
       data-action="pick-guard" data-guard="${g.id}"
-      title="${esc((g.caution || '') + (g.siteNG ? ' / 出禁現場あり' : ''))}">
-      <b>${esc(g.name)}</b><span class="pc-muted">${g.age}</span>
+      title="${esc([g.caution, (g.siteNGNames || []).length ? '出入り禁止: ' + g.siteNGNames.join('、') : ''].filter(Boolean).join(' / '))}">
+      <b>${esc(g.name)}</b>${g.age ? `<span class="pc-muted">${g.age}</span>` : ''}
       ${g.quals.map(q => `<span class="pc-chip-qual">${esc(q)}</span>`).join('')}
       ${g.caution ? '<span title="注意喚起あり">⚠️</span>' : ''}
-      ${g.siteNG ? '<span title="出入り禁止現場あり">🚫</span>' : ''}
-    </button>`).join('');
+      ${(g.siteNG || (g.siteNGNames || []).length) ? '<span title="出入り禁止の現場あり">🚫</span>' : ''}
+    </button>`).join('')
+    + `<button class="gchip free-add" data-action="quick-add" data-m="guardM">＋ 隊員を追加</button>`;
 
+  const addCard = `<button class="site-card site-add" data-action="quick-add" data-m="siteM">
+      <span class="site-add-ic">＋</span><b>配置先を追加</b>
+      <span class="pc-muted small">現場名・時間・人数・単価を入れるだけで、この画面に並びます</span>
+    </button>`;
   const cards = state.sites.map(st => {
     const list = shifts.filter(s => s.siteId === st.id);
     const need = needOf(st, date);
@@ -233,7 +238,7 @@ function boardView() {
       <div class="pc-card-head"><b>未配置の隊員</b><span class="pc-muted">クリックで選択 → 現場の「＋」をクリック（ドラッグ&ドロップも可）</span></div>
       <div class="roster-chips">${chips || '<span class="pc-muted">全員配置済み</span>'}</div>
     </div>
-    <div class="sites-grid">${cards}</div>
+    <div class="sites-grid">${cards}${addCard}</div>
     <p class="pc-muted">配置NG（出禁）・相性NG・ダブルブッキングは自動でブロック、注意喚起は警告つきで配置します。</p>`;
 }
 
@@ -287,7 +292,7 @@ function billingView() {
   if (!state.shifts.length)
     return blank('💴', '請求できる勤務がまだありません',
       '請求は「その日に配置した勤務」から自動で組み立てます。<br>配置先と単価を登録し、管制ボードで勤務予定を入れてください。',
-      state.sites.length ? ['board', '勤務予定を入力する →'] : ['m-site', '配置先を登録する →']);
+      state.sites.length ? ['board', '勤務予定を入力する →'] : { m: 'siteM', label: '＋ 配置先を追加' });
   const date = ui.boardDate;
   let T = { work: 0, extra: 0, tax: 0, total: 0 };
   const rows = state.sites.map(st => {
@@ -312,7 +317,7 @@ function billingView() {
     <td class="num">${yen(v.sub)}</td><td class="num">${yen(v.tax)}</td>
     <td class="num"><b>${yen(v.total)}</b></td></tr>`).join('');
 
-  return `${datePager()}
+  return `${datePager()}<span class="pager-add"><button class="add-inline" data-action="quick-add" data-m="siteM">＋ 配置先を追加</button></span>
     <div class="pc-kpi-row">
       <div class="pc-kpi"><b>${yen(T.work)}</b><span>警備料金</span></div>
       <div class="pc-kpi"><b>${yen(T.extra)}</b><span>加算・値引</span></div>
@@ -351,7 +356,7 @@ function depositView() {
       <td><button class="pc-btn" data-action="toggle-deposit" data-site="${esc(client)}">${paid ? '消込を取消' : '入金消込'}</button></td>
     </tr>`;
   }).join('');
-  return `${datePager()}
+  return `${datePager()}<span class="pager-add"><button class="add-inline" data-action="quick-add" data-m="client">＋ 得意先を追加</button></span>
     <div class="pc-kpi-row">
       <div class="pc-kpi"><b>${yen(T.bill)}</b><span>請求合計</span></div>
       <div class="pc-kpi"><b>${yen(T.paid)}</b><span>入金済</span></div>
@@ -369,7 +374,7 @@ function payrollView() {
   if (!state.shifts.length)
     return blank('💰', '給与を計算する勤務がまだありません',
       '給与は打刻と勤務予定から計算します。隊員を登録し、勤務予定を入れると<br>ここに支給額・控除・差引支給が並びます。',
-      state.guards.length ? ['board', '勤務予定を入力する →'] : ['m-guard', '隊員を登録する →']);
+      state.guards.length ? ['board', '勤務予定を入力する →'] : { m: 'guardM', label: '＋ 隊員を追加' });
   const rows = state.guards.map(g => {
     const p = calcPay(g);
     return `<tr>
@@ -382,7 +387,10 @@ function payrollView() {
     </tr>`;
   }).join('');
   return `
-    <div class="pc-pager"><b>2026年6月度 給与一覧</b></div>
+    <div class="pc-pager"><b>${(calcPay(state.guards[0]).month || todayKey().slice(0, 7)).replace('-', '年')}月度 給与一覧</b>
+      <span class="pc-muted small">${state.guards.length}名</span>
+      <span style="margin-left:auto"></span>
+      <button class="add-inline" data-action="quick-add" data-m="guardM">＋ 隊員を追加</button></div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
       <thead><tr><th>隊員コード</th><th>氏名</th><th class="num">勤怠</th><th class="num">総支給</th><th class="num">控除</th><th class="num">差引支給</th><th>帳票</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -434,11 +442,15 @@ function leaveAdminView() {
 /** 何も無い画面を「壊れている」ではなく「これから始める」に見せる。
  *  cta は [遷移先タブID, ボタン文言]。次の一手を必ず1つだけ示す */
 export function blank(ic, title, body, cta, sub) {
+  // cta = [遷移先タブID, 文言] または { m: マスタID, label } でその場に追加フォームを出す
+  const btn = !cta ? ''
+    : cta.m ? `<button class="pc-btn-navy" data-action="quick-add" data-m="${cta.m}">${esc(cta.label)}</button>`
+    : `<button class="pc-btn-navy" data-action="atab" data-tab="${cta[0]}">${esc(cta[1])}</button>`;
   return `<div class="pc-blank">
     <div class="pc-blank-ic">${ic}</div>
     <b>${esc(title)}</b>
     <p>${body}</p>
-    ${cta ? `<button class="pc-btn-navy" data-action="atab" data-tab="${cta[0]}">${esc(cta[1])}</button>` : ''}
+    ${btn}
     ${sub ? `<p class="pc-blank-sub">${sub}</p>` : ''}
   </div>`;
 }
@@ -452,14 +464,15 @@ function eduView() {
   if (!state.education.length)
     return blank('👨‍🏫', '教育記録がまだありません',
       '警備業法21条により、新任20時間・現任は年度ごとに10時間の教育が必要です。<br>隊員を登録したあと、ここに実施状況を記録してください。',
-      state.guards.length ? ['m-edu', '＋ 教育記録を追加'] : ['m-guard', 'まず隊員を登録する →']);
+      state.guards.length ? { m: 'eduM', label: '＋ 教育記録を追加' } : { m: 'guardM', label: 'まず隊員を追加' });
   const alerts = state.education.filter(e => Number(e.done) / Number(e.required || 1) < 0.6);
   return `
     ${alerts.length ? `<div class="pc-banner-warn">⚠ 法定教育の未達が <b>${alerts.length}名</b>：${alerts.map(e => esc(eduGuard(e).name)).join('、')}（年度末までに現任10h／新任20h）</div>` : ''}
     <div class="pc-pager"><span class="pc-muted small">${state.education.length}件</span>
       <span style="margin-left:auto"></span>
       <button class="pc-btn" data-action="report-out" data-report="edu-sheet">🖨 教育実施簿</button>
-      <button class="pc-btn-navy" data-action="atab" data-tab="m-edu">教育記録を編集 →</button></div>
+      <button class="add-inline" data-action="quick-add" data-m="eduM">＋ 教育記録を追加</button>
+      <button class="pc-btn" data-action="atab" data-tab="m-edu">一覧で編集 →</button></div>
     <div class="pc-card">
       ${state.education.map(e => {
         const g = eduGuard(e);

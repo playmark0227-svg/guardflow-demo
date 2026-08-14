@@ -1,10 +1,10 @@
-import { state, ui, commit, paidGrantOf, masterRows } from './store.js?v=3';
-import { blank } from './admin.js?v=3';
-import { MASTERS } from './masters.js?v=3';
-import { GROUPS, findGroup } from './menu.js?v=3';
-import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=3';
-import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=3';
-import { co } from './prints.js?v=3';
+import { state, ui, commit, paidGrantOf, masterRows, masterAdd, masterSet, defaultsFor } from './store.js?v=7';
+import { blank } from './admin.js?v=7';
+import { MASTERS } from './masters.js?v=7';
+import { GROUPS, findGroup } from './menu.js?v=7';
+import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=7';
+import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=7';
+import { co } from './prints.js?v=7';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -52,7 +52,14 @@ function cell(f, v, i, mid) {
   const nm = `data-mf="${f.k}" data-i="${i}"`;
   if (f.t === 'multi') return multiCell(f, v, i, mid);
   if (f.t === 'chk') return `<input type="checkbox" ${nm} ${val ? 'checked' : ''}>`;
-  if (f.t === 'sel') return `<select ${nm}><option value=""></option>${optionsFor(f, mid).map(o => `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (f.t === 'sel') {
+    const src = f.optFrom && MASTERS[f.optFrom === 'clients' ? 'client' : f.optFrom === 'sites' ? 'siteM'
+      : f.optFrom === 'guards' ? 'guardM' : f.optFrom];
+    // 参照先マスタにその場で足せるようにする（選ぶ→無い→マスタ管理へ、を往復させない）
+    const addOpt = src && src.quick ? `<option value="__add__">＋ ${esc(src.quickTitle || src.name)}…</option>` : '';
+    return `<select ${nm}><option value=""></option>${optionsFor(f, mid).map(o =>
+      `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}${addOpt}</select>`;
+  }
   if (f.t === 'area') return `<textarea ${nm} rows="2">${esc(val)}</textarea>`;
   const type = f.t === 'num' || f.t === 'yen' ? 'number' : f.t === 'date' ? 'date' : 'text';
   const step = f.t === 'num' ? ' step="0.001"' : '';
@@ -74,7 +81,9 @@ export function masterView(mid) {
       <input type="search" id="master-q" class="mst-q" value="${esc(ui.masterQ || '')}" placeholder="この表を検索">
       <span style="margin-left:auto"></span>
       ${m.bulk ? `<button class="pc-btn" data-action="master-bulk" data-m="${mid}">${esc(m.bulk)}</button>` : ''}
-      ${m.single ? '' : `<button class="pc-btn-navy" data-action="master-add" data-m="${mid}">＋ 新規登録</button>`}
+      ${m.single ? '' : m.quick
+        ? `<button class="pc-btn-navy" data-action="quick-add" data-m="${mid}">＋ 新規登録</button>`
+        : `<button class="pc-btn-navy" data-action="master-add" data-m="${mid}">＋ 新規登録</button>`}
       <button class="pc-btn" data-action="master-print" data-m="${mid}">🖨 一覧印刷</button>
     </div>
     ${m.note ? `<div class="mst-note">💡 ${esc(m.note)}</div>` : ''}
@@ -95,9 +104,81 @@ export function masterView(mid) {
     <p class="pc-muted small">値を変更するとその場で保存されます（実機の F1=登録 に相当）。削除は「削除保護」の代わりに確認ダイアログで防いでいます。</p>`;
 }
 
+/** その場で追加するための小さなフォーム。
+ *  表形式のマスタエディタは項目が多すぎるので、業務が回るのに要る項目だけを聞く。
+ *  optFrom で他マスタを参照する欄は、参照先が0件なら「先に◯◯を登録」と促す */
+export function quickForm(mid) {
+  const m = MASTERS[mid];
+  if (!m) return '';
+  const keys = m.quick || m.fields.filter(f => f.req).map(f => f.k);
+  // 既定値のうち「（新しい配置先）」のような仮の名前は入れない。
+  // 入れると必須チェックを素通りして、仮の名前のまま登録されてしまう
+  const row = defaultsFor(mid);
+  Object.keys(row).forEach(k => { if (typeof row[k] === 'string' && row[k].startsWith('（新しい')) row[k] = ''; });
+  return `<div class="qf">${keys.map(k => {
+    const f = m.fields.find(x => x.k === k);
+    if (!f) return '';
+    const v = row[k] ?? '';
+    const id = `qf-${k}`;
+    let input;
+    if (f.t === 'multi') {
+      const opts = optionsFor(f, mid);
+      input = opts.length
+        ? `<div class="qf-multi" id="${id}">${opts.map(o =>
+            `<label><input type="checkbox" value="${esc(o)}">${esc(o)}</label>`).join('')}</div>`
+        : `<span class="pc-muted small">${esc(f.emptyHint || '選択肢がありません')}</span>`;
+    } else if (f.t === 'sel') {
+      const opts = optionsFor(f, mid);
+      input = opts.length
+        ? `<select id="${id}">${f.req ? '' : '<option value=""></option>'}${opts.map(o =>
+            `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+        : `<button class="qf-need" data-action="quick-add" data-m="${esc(f.optFrom || '')}">
+             ＋ 先に${esc((MASTERS[f.optFrom] || {}).name || '参照先')}を登録する</button>`;
+    } else if (f.t === 'chk') {
+      input = `<input type="checkbox" id="${id}" ${v ? 'checked' : ''}>`;
+    } else {
+      const t = f.t === 'num' || f.t === 'yen' ? 'number' : f.t === 'date' ? 'date' : 'text';
+      input = `<input type="${t}" id="${id}" value="${esc(v)}" placeholder="${esc(f.hint || '')}">`;
+    }
+    return `<label class="qf-row"><span>${esc(f.l)}${f.req ? '<i>必須</i>' : ''}</span>${input}</label>`;
+  }).join('')}</div>`;
+}
+
+/** クイック追加フォームの入力値を読み取って1件登録する。戻り値は作った行 */
+export function quickSave(mid, box) {
+  const m = MASTERS[mid];
+  const keys = m.quick || m.fields.filter(f => f.req).map(f => f.k);
+  const vals = {};
+  keys.forEach(k => {
+    const f = m.fields.find(x => x.k === k);
+    if (!f) return;
+    if (f.t === 'multi') {
+      const wrap = box.querySelector(`#qf-${k}`);
+      if (wrap) vals[k] = [...wrap.querySelectorAll('input:checked')].map(x => x.value);
+      return;
+    }
+    const el = box.querySelector(`#qf-${k}`);
+    if (!el) return;
+    vals[k] = f.t === 'chk' ? el.checked
+      : f.t === 'num' || f.t === 'yen' ? (el.value === '' ? '' : Number(el.value))
+      : el.value.trim();
+  });
+  const req = m.fields.filter(f => f.req && keys.includes(f.k));
+  const blank = v => v == null || v === '' || (Array.isArray(v) && !v.length);
+  const miss = req.find(f => blank(vals[f.k]));
+  if (miss) return { error: `${miss.l}を入力してください` };
+  masterAdd(mid);
+  Object.entries(vals).forEach(([k, v]) => { if (v !== '' && v != null) masterSet(mid, 0, k, v); });
+  return { row: masterRows(mid)[0] };
+}
+
 // ===================== 受注入力 =====================
 export function orderView() {
   const date = ui.boardDate;
+  if (!state.sites.length)
+    return blank('📋', '配置先がまだ登録されていません',
+      '受注入力は「その日にこの現場へ何人必要か」を入れる画面です。<br>先に配置先を登録してください。',
+      state.clients.length ? { m: 'siteM', label: '＋ 配置先を追加' } : { m: 'client', label: '＋ 得意先を追加' });
   const rows = state.sites.map(st => {
     const ord = needOf(st, date);
     const asg = state.shifts.filter(s => s.date === date && s.siteId === st.id).length;
@@ -326,7 +407,12 @@ export function zenginRecords(ym) {
 
 // ===================== 得意先元帳 =====================
 export function ledgerView() {
-  const clients = [...new Set(state.sites.map(s => s.client))];
+  const clients = state.clients.length ? state.clients.map(c => c.name)
+    : [...new Set(state.sites.map(s => s.client))];
+  if (!clients.length)
+    return blank('📒', '得意先がまだ登録されていません',
+      '得意先元帳は、得意先ごとの請求と入金の残高を追う画面です。<br>まず発注元となる得意先を登録してください。',
+      { m: 'client', label: '＋ 得意先を追加' });
   const cur = ui.ledgerClient || clients[0];
   const rows = [];
   let bal = 0;
@@ -343,6 +429,7 @@ export function ledgerView() {
   return `
     <div class="pc-pager"><b>得意先元帳</b>
       <select id="ledger-client" class="mst-sel">${clients.map(c => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <button class="add-inline" data-action="quick-add" data-m="client">＋ 得意先を追加</button>
       <span style="margin-left:auto"></span>
       <span class="pc-muted small">残高 ${yen(bal)}</span>
     </div>
@@ -398,7 +485,7 @@ export function paidView(mode) {
     return blank('🌴', '隊員がまだ登録されていません',
       '有給の付与日数は、入社年月日と有給付与マスタ（労基法39条の法定日数）から自動で計算します。<br>'
       + '隊員マスタに入社年月日を入れると、ここに付与・取得・残と年5日の取得義務が並びます。',
-      ['m-guard', '隊員を登録する →']);
+      { m: 'guardM', label: '＋ 隊員を追加' });
   const rows = state.guards.map(g => {
     const grant = paidDays(g);
     const used = state.leaves.filter(l => l.guardId === g.id && l.status === 'approved').length;
@@ -429,6 +516,7 @@ export function paidView(mode) {
   return `
     <div class="pc-pager"><b>${mode === 'guard' ? '隊員別 有給状況確認' : '有給集計'}</b>
       <span style="margin-left:auto"></span>
+      <button class="add-inline" data-action="quick-add" data-m="guardM">＋ 隊員を追加</button>
       <button class="pc-btn" data-action="report-out" data-report="paid">🖨 有給関連印刷</button></div>
     ${need ? `<div class="pc-banner-warn">⚠ 年5日の取得義務（労基法39条7項）が未達の隊員が <b>${need}名</b> います</div>` : ''}
     <div class="pc-card pc-table-wrap"><table class="pc-table">

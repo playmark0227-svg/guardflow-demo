@@ -3,19 +3,19 @@ import {
   checkAssign, assign, unassign, undoUnassign, addNotice, commit,
   getSaveError, setWeather, masterRows, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
   editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
-} from './store.js?v=3';
-import { renderGuard } from './guard.js?v=3';
-import { renderAdmin } from './admin.js?v=3';
+} from './store.js?v=7';
+import { renderGuard } from './guard.js?v=7';
+import { renderAdmin } from './admin.js?v=7';
 import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
   dmHTML, codebookHTML, paidHTML, setMastersRef, co,
   nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
-} from './prints.js?v=3';
-import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=3';
-import { MASTERS } from './masters.js?v=3';
-import { findItem } from './menu.js?v=3';
-import { zenginRecords } from './screens.js?v=3';
+} from './prints.js?v=7';
+import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=7';
+import { MASTERS } from './masters.js?v=7';
+import { findItem, GROUPS } from './menu.js?v=7';
+import { zenginRecords, quickForm, quickSave } from './screens.js?v=7';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -82,6 +82,35 @@ function printHTML(html) {
 /** アプリ内の確認ダイアログ。ブラウザの confirm() はユーザーが
  *  「このページでこれ以上ダイアログを表示しない」を選ぶと以後 false を返し続け、
  *  ボタンを押しても何も起きない状態になるため使わない */
+/** マスタIDから、そのマスタ画面のメニューIDを引く */
+const quickTab = mid => (findItemByMaster(mid) || {}).id || 'dash';
+function findItemByMaster(mid) {
+  for (const g of GROUPS) { const it = g.items.find(x => x.master === mid); if (it) return it; }
+  return null;
+}
+
+/** その場で1件追加するフォームを開く。onDone があれば追加後に呼ぶ */
+function openQuick(mid, onDone, after = '', site = '') {
+  const m = MASTERS[mid];
+  if (!m) return;
+  ask({
+    title: m.quickTitle || `${m.name}に追加`,
+    ok: '登録する',
+    body: quickForm(mid)
+      + `<p class="qf-note">ここで入力しなかった項目は、あとから<b>${esc(m.name)}</b>で追加できます。</p>`,
+    run: box => {
+      const r = quickSave(mid, box);
+      if (r.error) { toast('⚠ ' + r.error, 'warn'); return; }
+      const name = r.row.name || r.row.guardName || r.row.code || '1件';
+      if (onDone) { onDone(r.row); toast(`✓ ${name} を登録して選択しました`); return; }
+      // 隊員を足した流れなら、そのまま現場に配置するところまでやる
+      if (after === 'assign' && site) { tryAssign(r.row.id, site); return; }
+      toast(`✓ ${name} を登録しました`, 'ok',
+        { label: '詳しく編集', run: () => { ui.adminTab = quickTab(mid); rerender(); } });
+    },
+  });
+}
+
 let pendingAsk = null;
 function ask({ title, body, ok, danger, run }) {
   pendingAsk = run;
@@ -227,6 +256,8 @@ document.addEventListener('click', async e => {
   // --- 新メニュー・マスタ ---
   else if (a === 'open-item') { ui.adminTab = t.dataset.item; ui.masterQ = ''; rerender(); }
   else if (a === 'master-add') { masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
+  // マスタ管理を開かずに、その画面から直接1件足す
+  else if (a === 'quick-add') { openQuick(t.dataset.m, null, t.dataset.then || '', t.dataset.site || ''); }
   else if (a === 'master-del') {
     const m = t.dataset.m, i = Number(t.dataset.i);
     const row = masterRows(m)[i] || {};
@@ -369,6 +400,19 @@ document.addEventListener('change', e => {
   if (ac === 'bonus-meta') { state.bonus[el.dataset.k] = el.value; commit(); return; }
   if (ac === 'option') { setOption(el.dataset.k, el.checked); return; }
   if (ac === 'set-weather') { setWeather(el.dataset.date, el.dataset.site, el.value); return; }
+  // 表のセレクタで「＋ 新規登録…」を選んだら、その場で参照先マスタに追加する
+  if (el.tagName === 'SELECT' && el.value === '__add__' && el.dataset.mf) {
+    const mid = el.closest('table') ? el.closest('.pc-main').querySelector('[data-action="master-add"],[data-action="quick-add"]')?.dataset.m : null;
+    const f = mid && (MASTERS[mid].fields.find(x => x.k === el.dataset.mf));
+    const srcId = f && (f.optFrom === 'clients' ? 'client' : f.optFrom === 'sites' ? 'siteM'
+      : f.optFrom === 'guards' ? 'guardM' : f.optFrom);
+    el.value = '';
+    if (srcId && MASTERS[srcId]) {
+      const back = { mid, i: Number(el.dataset.i), k: el.dataset.mf };
+      openQuick(srcId, row => { masterSet(back.mid, back.i, back.k, row.name || row.code || ''); });
+    }
+    return;
+  }
   if (ac === 'master-multi') { masterMulti(el.dataset.m, Number(el.dataset.i), el.dataset.k, el.value, el.checked); return; }
   if (ac === 'staff') { ui.staff = el.value; rerender(); return; }
   if (el.id === 'ledger-client') { ui.ledgerClient = el.value; rerender(); return; }

@@ -1,9 +1,9 @@
-import { state, ui } from './store.js?v=3';
+import { state, ui } from './store.js?v=7';
 import {
   todayKey, addDays, fmtMD, esc, yen, parseHM, absMin, daysBetween,
   nightOverlap, nightBandsIn, subtractIntervals, fmtAbs, hrs, pad, fromKey,
   monthStart, daysInMonth, addMonths, fmtYM,
-} from './util.js?v=3';
+} from './util.js?v=7';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);

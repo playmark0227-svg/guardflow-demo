@@ -4,6 +4,7 @@ export const MASTERS = {
   // 業務データそのものを編集するマスタ。store で state 直下のコレクションを指す
   client: {
     name: '得意先マスタ', key: 'name', store: 'clients', idPrefix: 'c',
+    quickTitle: '得意先を追加', quick: ['name', 'kana', 'tel', 'close', 'tax'],
     note: '締日・請求日・課税方法は請求集計と請求書にそのまま使われます。得意先を追加すると配置先マスタの得意先欄から選べます',
     fields: [
       { k: 'code', l: '得意先番号', w: 100, hint: '6桁' }, { k: 'name', l: '得意先名', w: 240, req: true },
@@ -20,6 +21,7 @@ export const MASTERS = {
   },
   eduM: {
     name: '教育記録', key: 'guardName', store: 'education', idPrefix: 'e',
+    quickTitle: '教育記録を追加', quick: ['guardName', 'type', 'required', 'done', 'at', 'content'],
     note: '警備業法21条の法定教育。新任20時間・現任は年度10時間が目安です。実施時間を入れると教育実施簿と未達アラートに反映されます',
     fields: [
       { k: 'guardName', l: '隊員', t: 'sel', optFrom: 'guards', w: 160, req: true },
@@ -33,6 +35,7 @@ export const MASTERS = {
   },
   siteM: {
     name: '配置先マスタ', key: 'name', store: 'sites', idPrefix: 's',
+    quickTitle: '配置先を追加', quick: ['name', 'client', 'kind', 'work', 'start', 'end', 'brk', 'need', 'bill', 'reqQual'],
     note: '所定時間・所定休憩・必要人数は管制ボードと賃金計算の前提になります。単価は「配置先単価マスタ」が優先されます',
     fields: [
       { k: 'name', l: '配置先名', w: 240, req: true }, { k: 'abbr', l: '略称', w: 140 },
@@ -52,6 +55,7 @@ export const MASTERS = {
   },
   guardM: {
     name: '隊員マスタ', key: 'name', store: 'guards', idPrefix: 'g',
+    quickTitle: '隊員を追加', quick: ['name', 'kana', 'office', 'gtype', 'hiredAt', 'rate', 'quals'],
     note: '入社年月日は有給付与日数の判定に、単価ランクは時給に、カナ氏名と口座は振込データに使われます',
     fields: [
       { k: 'code', l: '隊員番号', w: 100, hint: '6桁' }, { k: 'name', l: '氏名', w: 150, req: true },
@@ -92,7 +96,7 @@ export const MASTERS = {
     seed: [{ code: '01', name: 'GuardFlow警備株式会社', zip: '231-0057', addr: '神奈川県横浜市中区曙町2-19-1', tel: '045-000-0000', fax: '045-000-0001', ceo: '守屋 健一', permit: '神奈川県公安委員会 第00000000号', kana: 'ｶ)ｶﾞｰﾄﾞﾌﾛｰｹｲﾋﾞ', payerCode: '0123456789', payerBank: '横浜銀行', payerAcct: '1234567', seal: true }],
   },
   branch: {
-    name: '支店マスタ', key: 'code',
+    name: '支店マスタ', key: 'code', quickTitle: '支店・営業所を追加', quick: ['code', 'name'],
     fields: [
       { k: 'code', l: '支店コード', w: 100, req: true }, { k: 'name', l: '支店名', w: 180, req: true },
       { k: 'zip', l: '郵便番号', w: 100 }, { k: 'addr', l: '住所', w: 280 },
@@ -105,7 +109,7 @@ export const MASTERS = {
     ],
   },
   staff: {
-    name: '担当者マスタ', key: 'code',
+    name: '担当者マスタ', key: 'code', quickTitle: '担当者を追加', quick: ['code', 'name', 'branch', 'role'],
     fields: [
       { k: 'code', l: '担当者コード', w: 110, req: true }, { k: 'name', l: '氏名', w: 150, req: true },
       { k: 'branch', l: '所属支店', t: 'sel', optFrom: 'branch', w: 140 },
@@ -145,7 +149,7 @@ export const MASTERS = {
     ],
   },
   bank: {
-    name: '金融機関マスタ', key: 'code',
+    name: '金融機関マスタ', key: 'code', quickTitle: '金融機関を追加', quick: ['code', 'name', 'bcode', 'bname'],
     note: '実運用では全銀協の金融機関コード一覧を取り込みます。ここには振込に使う銀行・支店を登録してください',
     fields: [
       { k: 'code', l: '銀行コード', w: 100, req: true }, { k: 'name', l: '銀行名', w: 180, req: true },
@@ -222,7 +226,7 @@ export const MASTERS = {
     ],
   },
   qual: {
-    name: '資格マスタ', key: 'name',
+    name: '資格マスタ', key: 'name', quickTitle: '資格を追加', quick: ['name', 'kind', 'allow'],
     fields: [
       { k: 'name', l: '資格名', w: 220, req: true },
       { k: 'kind', l: '種別', t: 'sel', opt: ['検定1級', '検定2級', '指導教育責任者', '機械警備業務管理者', 'その他'], w: 160 },
