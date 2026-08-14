@@ -1,11 +1,12 @@
 import { state } from './store.js';
 import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js';
-import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, billOf, billRateOf, needOf } from './gantt.js';
+import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
 // 実際の勤務データ（打刻）から、指定月の給与を組み立てる
 export function payMonths() {
-  return [...new Set(state.shifts.map(s => s.date.slice(0, 7)))].sort();
+  const ms = [...new Set(state.shifts.map(s => s.date.slice(0, 7)))].sort();
+  return ms.length ? ms : [todayKey().slice(0, 7)];   // 勤務が無くても当月は選べる
 }
 
 // マスタから料率を引く。見つからないときだけ既定値に落とす
@@ -26,6 +27,7 @@ export function dailyTax(afterInsPerDay) {
 }
 
 export function calcPay(g, ym) {
+  if (!g) g = { id: '', name: '', quals: [], rate: 0 };     // 隊員未登録でも呼べるようにする
   const months = payMonths();
   const month = ym && months.includes(ym) ? ym : months[months.length - 1] || '';
   const list = state.shifts.filter(s => s.guardId === g.id && s.date.startsWith(month));
@@ -151,6 +153,7 @@ export function payslipPrintHTML(g, ym) {
 // ---- 請求書 ----
 export function invoiceHTML(siteId, date) {
   const site = state.sites.find(s => s.id === siteId);
+  if (!site) return empty('請 求 書', '配置先が登録されていないため、請求書を作成できません。マスタ管理 → 配置先マスタ から登録してください。');
   const b = billOf(site, date);
   const amount = b.work, tax = b.tax, hours = b.hours;
   const list = { length: b.n };
@@ -258,6 +261,14 @@ export function scheduleHTML(date) {
 }
 
 // ---- 実機メニューに対応する帳票群 ----
+/** 対象データが無いときの帳票。白紙ではなく、次に何をすればよいかを刷る */
+const empty = (title, msg) => `
+  <div class="payslip">
+    <h1>${title}</h1>
+    <p class="ps-meta">${fmtMD(todayKey())}　／　GuardFlow警備株式会社（デモ）</p>
+    <p style="margin:28px 0;padding:18px;border:1px dashed #bbb;border-radius:6px;color:#666">${msg}</p>
+  </div>`;
+
 const P = (title, meta, head, rows, foot) => `
   <div class="payslip">
     <h1>${title}</h1>
@@ -335,7 +346,7 @@ export function payListHTML(ym) {
       <td style="text-align:right">${yen(p.gross)}</td><td style="text-align:right">${yen(p.ded)}</td>
       <td style="text-align:right">${yen(p.net)}</td></tr>`;
   }).join('');
-  const m = calcPay(state.guards[0], ym).month;
+  const m = state.guards.length ? calcPay(state.guards[0], ym).month : (ym || payMonths()[0]);
   return P('給 与 一 覧 表', m.replace('-', '年') + '月度',
     ['コード', '氏名', '出勤', '実働(h)', '総支給', '控除計', '差引支給'],
     rows + `<tr class="ps-net"><td colspan="4"><b>合計</b></td>
@@ -425,18 +436,21 @@ export function nippoHTML(date, band) {
 
 // ---- 教育実施簿（警備業法21条／規則38条）----
 export function eduSheetHTML() {
+  if (!state.education.length) return empty('教 育 実 施 簿', '教育記録がまだ登録されていません。教育管理から実施状況を登録してください。');
   const rows = state.education.map(e => {
-    const g = state.guards.find(x => x.id === e.guardId) || {};
-    const short = e.done < e.required;
+    const g = state.guards.find(x => x.name === e.guardName)
+      || state.guards.find(x => x.id === e.guardId) || { name: e.guardName || '' };
+    const short = Number(e.done) < Number(e.required);
     return `<tr><td>${esc(g.code || '')}</td><td>${esc(g.name || '')}</td><td>${esc(g.office || '')}</td>
-      <td>${esc(e.type)}</td>
-      <td style="text-align:right">${e.required}h</td>
-      <td style="text-align:right">${e.done}h</td>
-      <td style="text-align:right">${short ? `<b>未了 ${e.required - e.done}h</b>` : '完了'}</td></tr>`;
+      <td>${esc(e.type || '')}</td>
+      <td>${esc(e.at || '')}</td>
+      <td style="text-align:right">${Number(e.required) || 0}h</td>
+      <td style="text-align:right">${Number(e.done) || 0}h</td>
+      <td style="text-align:right">${short ? `<b>未了 ${Number(e.required) - Number(e.done)}h</b>` : '完了'}</td></tr>`;
   }).join('');
-  const left = state.education.filter(e => e.done < e.required).length;
+  const left = state.education.filter(e => Number(e.done) < Number(e.required)).length;
   return P('教 育 実 施 簿', `${todayKey().slice(0, 4)}年度　未了 ${left}名`,
-    ['コード', '氏名', '所属', '区分', '法定時間', '実施時間', '状況'], rows,
+    ['コード', '氏名', '所属', '区分', '直近実施日', '法定時間', '実施時間', '状況'], rows,
     '警備業法第21条・同施行規則第38条の教育記録。備付書類として3年間保存します。');
 }
 
@@ -457,7 +471,7 @@ export function chinginHTML(ym) {
       <td style="text-align:right">${yen(p.ded)}</td>
       <td style="text-align:right"><b>${yen(p.net)}</b></td></tr>`;
   }).join('');
-  const m = calcPay(state.guards[0], ym).month;
+  const m = state.guards.length ? calcPay(state.guards[0], ym).month : (ym || payMonths()[0]);
   return P('賃 金 台 帳', `${m.replace('-', '年')}月分`,
     ['コード', '氏名', '労働日数', '労働時間', '時間外', '深夜', '休日', '基本給', '割増賃金', '手当', '総支給', '控除', '差引支給'], rows,
     '労働基準法第108条・同施行規則第54条の必要記載事項を満たす様式です。第109条により3年間保存してください。');
@@ -466,12 +480,13 @@ export function chinginHTML(ym) {
 // ---- 警備契約書（警備業法19条の書面交付）----
 export function contractHTML(siteId) {
   const st = state.sites.find(s => s.id === siteId) || state.sites[0];
+  if (!st) return empty('警 備 契 約 書', '配置先が登録されていないため、契約書を作成できません。マスタ管理 → 得意先マスタ、配置先マスタ の順に登録してください。');
   const cl = state.clients.find(c => c.name === st.client) || {};
-  const kind = `${st.kind}警備契約書`;
+  const kind = `${kindNo(st) || '1号'}警備契約書`;
   const tpl = (state.masters.contract || []).filter(x => x.kind === kind);
   // 契約書の雛形に、その配置先の実データを差し込む
   const fill = (item, body) => {
-    if (/名称及び所在地|場所/.test(item)) return `${st.name}（${st.addrFull || st.addr || ''}）`;
+    if (/名称及び所在地|場所/.test(item)) return `${st.name}${st.addrFull || st.addr ? `（${st.addrFull || st.addr}）` : ''}`;
     if (/人員/.test(item)) return `${st.need}名${st.reqQual ? `（うち${st.reqQual}保有者1名以上）` : ''}`;
     if (/知識及び技能/.test(item) && st.reqQual) return `${st.reqQual}の合格者を1名以上配置`;
     if (/日及び時間帯/.test(item)) return `${st.start}〜${st.end}${st.night ? '（深夜帯を含む）' : ''}`;

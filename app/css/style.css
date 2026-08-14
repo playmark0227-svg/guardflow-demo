@@ -830,3 +830,52 @@ th.ded, td.ded { background: color-mix(in srgb, var(--red) 6%, transparent); }
 .pc-staff select { font: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--text); }
 .pc-authnote { padding: 2px 10px 6px; font-size: 11px; color: var(--orange); font-weight: 700; }
 .wx-pick select { font: inherit; font-size: 11.5px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--text); }
+
+/* 複数選択セル */
+.mc { min-width: 150px; }
+.mc > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 3px; padding: 4px 7px; font-size: 12.5px; white-space: nowrap; background: var(--card); }
+.mc > summary::-webkit-details-marker { display: none; }
+.mc > summary i { font-style: normal; margin-left: 6px; color: #fff; background: var(--navy); border-radius: 8px; padding: 0 6px; font-size: 11px; }
+.mc > summary i:empty { display: none; }
+.mc[open] > summary { border-color: var(--blue); }
+/* 表は横スクロールするため、絶対配置だと枠に切られる。行の中に開いて必ず見えるようにする */
+.mc-list { margin-top: 5px; max-height: 210px; overflow-y: auto; width: max-content; min-width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
+.mc-list label { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 3px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.mc-list label:hover { background: var(--sec-bg); }
+
+/* 空状態 */
+.pc-blank { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  padding: 54px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); }
+.pc-blank-ic { font-size: 44px; line-height: 1; opacity: .82; }
+.pc-blank b { font-size: 17px; }
+.pc-blank p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.85; max-width: 560px; }
+.pc-blank .pc-btn-navy { margin-top: 6px; padding: 9px 22px; font-size: 14px; }
+.pc-blank-sub { font-size: 12px !important; }
+
+/* 初期セットアップ */
+.pc-setup { background: var(--card); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 16px; }
+.pc-setup-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.pc-setup-head b { font-size: 16px; }
+.pc-setup-bar { flex: 1; height: 7px; background: var(--sec-bg); border-radius: 4px; overflow: hidden; max-width: 260px; }
+.pc-setup-bar span { display: block; height: 100%; background: var(--green); transition: width .3s; }
+.pc-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; }
+.pc-step { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 4px; text-align: left; background: var(--card); }
+.pc-step:not(.done):hover { border-color: var(--blue); background: var(--sec-bg); }
+.pc-step-n { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: var(--sec-bg); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
+.pc-step.done .pc-step-n { background: var(--green); color: #fff; }
+.pc-step.next { border-color: var(--navy); border-width: 2px; padding: 8px 10px; }
+.pc-step.next .pc-step-n { background: var(--navy); color: #fff; }
+.pc-step-b { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pc-step-b b { font-size: 13.5px; }
+.pc-step-b span { font-size: 11.5px; color: var(--muted); }
+.pc-step.done .pc-step-b b { color: var(--muted); font-weight: 600; }
+
+/* 隊員アプリの空状態 */
+.g-blank { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 48px 22px; }
+.g-blank-ic { font-size: 42px; line-height: 1; opacity: .85; }
+.g-blank b { font-size: 16px; }
+.g-blank p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.g-blank .g-btn-navy { width: auto; margin-top: 6px; padding: 11px 20px; }
+.g-blank-sub { font-size: 11.5px !important; }

@@ -315,7 +315,25 @@ function noticeView(g) {
 }
 
 export function renderGuard(el) {
-  const g = state.guards.find(x => x.id === ui.guardId);
+  // 隊員が1人も登録されていないと、この画面は誰の画面でもない
+  if (!state.guards.length) {
+    el.innerHTML = `
+    <div class="guard-shell">
+      <div class="g-appbar"><span class="g-appbar-title">隊員アプリ</span></div>
+      <div class="g-blank">
+        <div class="g-blank-ic">📱</div>
+        <b>隊員がまだ登録されていません</b>
+        <p>この画面は、現場に出る隊員が自分のスマートフォンで使うアプリです。<br>
+          管制センターで隊員を登録すると、その隊員としてログインした状態を確認できます。</p>
+        <button class="g-btn-navy" data-action="role" data-role="admin">管制センターで隊員を登録する →</button>
+        <p class="g-blank-sub">サンプルで動きを見たいときは、画面右上の <b>🧪 デモデータ</b> を押してください。</p>
+      </div>
+    </div>`;
+    return;
+  }
+  // 選択中の隊員が消えていたら先頭に戻す
+  const g = state.guards.find(x => x.id === ui.guardId) || state.guards[0];
+  if (ui.guardId !== g.id) ui.guardId = g.id;
   let body;
   if (ui.guardTab === 'notice' && ui.noticeId) body = noticeDetailView() || noticeView(g);
   else if (ui.guardTab === 'shift' && ui.shiftDetail) body = shiftDetailView(g);

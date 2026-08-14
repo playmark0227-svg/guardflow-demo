@@ -22,18 +22,35 @@ export function groupView(gid) {
 }
 
 // ===================== 汎用マスタエディタ =====================
-const optionsFor = f => {
+const optionsFor = (f, mid) => {
   if (f.opt) return f.opt;
   if (f.optFrom === 'sites') return state.sites.map(s => s.name);
   if (f.optFrom === 'clients') return state.clients.map(c => c.name);
+  if (f.optFrom === 'guards') return state.guards.map(g => g.name);
   return (state.masters[f.optFrom] || []).map(x => x.name);   // 任意のマスタを選択肢にできる
 };
 
-function cell(f, v, i) {
+/** 複数選択セル。表の中に収めるため、選択中の内容を要約して <details> に畳む */
+function multiCell(f, v, i, mid) {
+  const cur = Array.isArray(v) ? v : v && typeof v === 'object' ? Object.keys(v) : [];
+  const opts = optionsFor(f, mid);
+  const label = cur.length ? cur.join('、') : '未設定';
+  return `<details class="mc">
+    <summary title="${esc(label)}">${esc(label.length > 18 ? label.slice(0, 18) + '…' : label)}<i>${cur.length || ''}</i></summary>
+    <div class="mc-list">
+      ${opts.length ? opts.map(o => `<label><input type="checkbox" data-action-change="master-multi"
+        data-m="${mid}" data-i="${i}" data-k="${f.k}" value="${esc(o)}" ${cur.includes(o) ? 'checked' : ''}>${esc(o)}</label>`).join('')
+        : `<span class="pc-muted small">${esc(f.emptyHint || '選択肢がまだありません')}</span>`}
+    </div>
+  </details>`;
+}
+
+function cell(f, v, i, mid) {
   const val = v == null ? '' : v;
   const nm = `data-mf="${f.k}" data-i="${i}"`;
+  if (f.t === 'multi') return multiCell(f, v, i, mid);
   if (f.t === 'chk') return `<input type="checkbox" ${nm} ${val ? 'checked' : ''}>`;
-  if (f.t === 'sel') return `<select ${nm}><option value=""></option>${optionsFor(f).map(o => `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (f.t === 'sel') return `<select ${nm}><option value=""></option>${optionsFor(f, mid).map(o => `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
   if (f.t === 'area') return `<textarea ${nm} rows="2">${esc(val)}</textarea>`;
   const type = f.t === 'num' || f.t === 'yen' ? 'number' : f.t === 'date' ? 'date' : 'text';
   const step = f.t === 'num' ? ' step="0.001"' : '';
@@ -67,7 +84,7 @@ export function masterView(mid) {
         </tr></thead>
         <tbody>
           ${idx.map(i => `<tr>
-            ${m.fields.map(f => `<td>${cell(f, rows[i][f.k], i)}</td>`).join('')}
+            ${m.fields.map(f => `<td>${cell(f, rows[i][f.k], i, mid)}</td>`).join('')}
             ${m.single ? '' : `<td><button class="rm" data-action="master-del" data-m="${mid}" data-i="${i}" title="削除">×</button></td>`}
           </tr>`).join('') || `<tr><td colspan="${m.fields.length + 1}" class="pc-muted">${q ? '該当する行がありません' : 'データがありません。「＋ 新規登録」で追加してください'}</td></tr>`}
         </tbody>

@@ -101,6 +101,14 @@ export function workOf(sh) {
 
 /** シフト1件の賃金。基礎賃金は全実働に、割増は該当分にのみ加算する（労基法の積み上げ方式）。
  *  端数はこの1箇所だけで丸めるので、各列を足すと必ず支給額と一致する */
+/** 配置先の警備業区分を「1号」〜「4号」に正規化する。
+ *  区分マスタは「2号（交通誘導・雑踏警備業務）」のような正式名称を持つため、
+ *  チップ表示や契約書の種別に使うときは号数だけを取り出す */
+export function kindNo(st) {
+  const m = String((st || {}).kind || '').match(/[1-4１-４]/);
+  return m ? m[0].replace(/[１-４]/, c => '１２３４'.indexOf(c) + 1) + '号' : '';
+}
+
 /** その勤務に適用される勤務マスタの1行。shift.workId → 現場の既定 の順に引く */
 export function workKindOf(sh) {
   const rows = state.masters.work || [];

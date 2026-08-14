@@ -1,7 +1,7 @@
 import {
-  state, ui, subscribe, rerender, resetDemo, punch, toggleOffline,
+  state, ui, subscribe, rerender, resetDemo, loadDemo, isDemo, setupSteps, punch, toggleOffline,
   checkAssign, assign, unassign, undoUnassign, addNotice, commit,
-  getSaveError, setWeather, masterSet, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
+  getSaveError, setWeather, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
   editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
 } from './store.js';
 import { renderGuard } from './guard.js';
@@ -121,7 +121,15 @@ document.addEventListener('click', async e => {
 
   if (a === 'role') { ui.role = t.dataset.role; rerender(); }
   else if (a === 'theme') { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; localStorage.setItem('gf-theme', theme); applyTheme(); }
-  else if (a === 'reset') { resetDemo(); toast('デモデータをリセットしました'); }
+  else if (a === 'reset') {
+    if (!confirm('登録した内容をすべて消して、契約直後の初期状態に戻します。よろしいですか？')) return;
+    resetDemo(); toast('初期状態に戻しました');
+  }
+  else if (a === 'load-demo') {
+    if (!confirm('デモ用のサンプルデータ（隊員12名・現場6件・3週間分の勤務）を入れます。\n' +
+      'いま登録している内容は置き換わります。よろしいですか？')) return;
+    loadDemo(); toast('デモデータを入れました');
+  }
   else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; ui.noticeId = null; rerender(); }
   else if (a === 'notice-open') { ui.noticeId = t.dataset.id; rerender(); }
   else if (a === 'notice-back') { ui.noticeId = null; rerender(); }
@@ -311,6 +319,7 @@ document.addEventListener('change', e => {
   if (ac === 'bonus-meta') { state.bonus[el.dataset.k] = el.value; commit(); return; }
   if (ac === 'option') { setOption(el.dataset.k, el.checked); return; }
   if (ac === 'set-weather') { setWeather(el.dataset.date, el.dataset.site, el.value); return; }
+  if (ac === 'master-multi') { masterMulti(el.dataset.m, Number(el.dataset.i), el.dataset.k, el.value, el.checked); return; }
   if (ac === 'staff') { ui.staff = el.value; rerender(); return; }
   if (el.id === 'ledger-client') { ui.ledgerClient = el.value; rerender(); return; }
   // 勤務ガントのフィルタ行

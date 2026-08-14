@@ -1,8 +1,8 @@
 import { todayKey, addDays, fromKey, uid } from './util.js';
 import { seedMasters } from './masters.js';
 
-// デモ用シードデータ。日付は常に「今日」を基準に生成する
-export function seedData() {
+// デモ用データ。日付は常に「今日」を基準に生成する
+export function demoData() {
   const D0 = todayKey();
   const D = n => addDays(D0, n);
 
@@ -150,10 +150,34 @@ export function seedData() {
       tax: '外税', close: '月末', payMonth: 1, payDay: '月末', payType: '振込', note: '深夜作業。単価に深夜割増を含む' },
   ];
   return {
-    seedDate: D0, offline: false, clients, guards, sites, shifts, education, notices, leaves,
+    ...emptyData(),
+    masters: seedMasters(),        // デモは金額入りのマスタをそのまま使う（初期状態は0円）
+    seedDate: D0, clients, guards, sites, shifts, education, notices, leaves,
+    bonus: { date: D(20), name: '夏季賞与', amount: {} },
+    demo: true,
+  };
+}
+
+/** 契約直後の初期状態。
+ *  製品が最初から持っているマスタ（法令の税額表・保険料率・有給付与日数、祝日、郵便番号、
+ *  金融機関コード、警備業区分、資格名、勤務種別など）は入れたままにし、
+ *  自社・支店・担当者・得意先・配置先・隊員・単価といった会社ごとの値だけを空にする。
+ *  金額は会社ごとに違うので、項目名は残して金額は 0 にする（初期値のまま誤って請求・支給しないため）。 */
+export function emptyData() {
+  const m = seedMasters();
+  ['branch', 'staff', 'siteRate', 'guardRate'].forEach(k => { m[k] = []; });
+  m.company = [{}];                                  // 1件だけの自社マスタは空の行を残して入力させる
+  ['qual', 'payItem', 'dedItem', 'billItem'].forEach(k =>
+    (m[k] || []).forEach(r => { if ('allow' in r) r.allow = 0; if ('amount' in r) r.amount = 0; }));
+  return {
+    seedDate: todayKey(), offline: false, demo: false,
+    clients: [], guards: [], sites: [], shifts: [], education: [], notices: [], leaves: [],
     avail: {}, deposits: {}, auditLog: [], weatherLog: {},
-    masters: seedMasters(),
-    orders: {}, allowances: {}, bonus: { date: D(20), name: '夏季賞与', amount: {} },
+    masters: m,
+    orders: {}, allowances: {}, bonus: { date: '', name: '', amount: {} },
     options: { nippoSplit: false, dayNight: true, taxIn: false, autoHour: true, blockPaid: true, warnRun: true },
   };
 }
+
+/** 起動時の既定は初期状態。デモは画面のボタンから入れる */
+export const seedData = emptyData;

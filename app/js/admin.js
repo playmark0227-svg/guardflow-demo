@@ -1,7 +1,7 @@
-import { state, ui, canSee, currentAuth, currentStaff } from './store.js';
+import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js';
 import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js';
 import { calcPay } from './prints.js';
-import { ganttView, wageOf, billOf, needOf, billRateOf, clientTotals } from './gantt.js';
+import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js';
 import { GROUPS, PINNED, findItem, findGroup } from './menu.js';
 import { MASTERS } from './masters.js';
 import {
@@ -36,8 +36,40 @@ function datePager() {
 }
 
 // ================= ダッシュボード =================
+/** 契約直後に最初に見る画面。何から手を付ければよいかを順番で示す */
+function setupView() {
+  const steps = setupSteps();
+  const done = steps.filter(x => x.done).length;
+  const nextI = steps.findIndex(x => !x.done);
+  return `
+    <div class="pc-setup">
+      <div class="pc-setup-head">
+        <b>はじめの設定</b>
+        <span class="pc-setup-bar"><span style="width:${Math.round(done / steps.length * 100)}%"></span></span>
+        <span class="pc-muted small">${done}/${steps.length} 完了</span>
+        <span style="margin-left:auto"></span>
+        ${done === steps.length ? '' : '<span class="pc-muted small">上から順に登録してください</span>'}
+      </div>
+      <div class="pc-steps">
+        ${steps.map((x, i) => `<button class="pc-step ${x.done ? 'done' : ''} ${i === nextI ? 'next' : ''}"
+          data-action="atab" data-tab="${x.id}">
+          <span class="pc-step-n">${x.done ? '✓' : i + 1}</span>
+          <span class="pc-step-b"><b>${esc(x.name)}</b><span>${esc(x.hint)}</span></span>
+        </button>`).join('')}
+      </div>
+    </div>`;
+}
+
 function dashView() {
   const D0 = todayKey(), D1 = addDays(D0, 1), Dm1 = addDays(D0, -1);
+  // 何も登録されていないうちは、KPIや売上グラフではなく手順を見せる
+  if (!state.guards.length && !state.sites.length && !state.clients.length)
+    return setupView() + blank('🛡️', 'ようこそ。まだデータはありません',
+      'この画面は、契約直後の状態です。上の手順に沿って自社情報から登録していくと、<br>' +
+      '管制ボード・請求・給与・帳票がそのまま使えるようになります。',
+      ['m-company', '自社情報の登録から始める →'],
+      '機能を先に見たいときは、画面右上の <b>🧪 デモデータ</b> でサンプルを入れられます。');
+  const setup = setupSteps().every(x => x.done) ? '' : setupView();
   // 明日その現場に1人でも配置予定があるものだけを「稼働現場」として数える
   const liveSites = new Set(dayShifts(D1).map(s => s.siteId));
   const needSum = state.sites.filter(s => liveSites.has(s.id)).reduce((n, s) => n + needOf(s, D1), 0);
@@ -58,7 +90,7 @@ function dashView() {
   // タスク（実データから生成）
   const now = nowMin();
   const alerts = dayShifts(D0).filter(sh => statusOf(sh) === 'scheduled' && now >= parseHM(sh.start) - 30 && parseHM(sh.start) >= 360).length;
-  const eduLow = state.education.filter(e => e.done / e.required < 0.6).length;
+  const eduLow = state.education.filter(e => Number(e.done) / Number(e.required || 1) < 0.6).length;
   const pendingLv = state.leaves.filter(l => l.status === 'pending').length;
   const tasks = [
     missing ? { ic: '📅', cls: 'tk-orange', label: `明日${fmtMD(D1)}の配置不足（${missing}名）`, link: '勤務予定を入力', tab: 'board', date: D1 } : null,
@@ -68,7 +100,7 @@ function dashView() {
   ].filter(Boolean);
 
   const chart = lineChart(monthly, prevY);
-  return `
+  return setup + `
     <div class="pc-sec-head"><h2>勤務予定・勤務実績</h2><button class="pc-link" data-action="atab" data-tab="finance">経営モード ⇄</button></div>
     <div class="pc-2col">
       <div class="pc-card">
@@ -111,8 +143,11 @@ function dashView() {
 // 簡易折れ線チャート（SVG・当年=紺 / 前年=グレー）
 function lineChart(cur, prev) {
   const W = 720, H = 180, PL = 46, PB = 22, PT = 10;
-  const all = [...cur, ...prev];
-  const min = Math.min(...all) * 0.97, max = Math.max(...all) * 1.03;
+  const all = [...cur, ...prev].filter(v => Number.isFinite(v));
+  // 実績が1件も無いと min/max が ±Infinity になり座標が NaN になる。0〜1のダミー軸で描く
+  const lo = all.length ? Math.min(...all) : 0, hi = all.length ? Math.max(...all) : 1;
+  const min = lo === hi ? lo - 1 : lo * 0.97;
+  const max = lo === hi ? hi + 1 : hi * 1.03;
   const x = i => PL + i * (W - PL - 10) / 11;
   const y = v => PT + (H - PT - PB) * (1 - (v - min) / (max - min));
   const path = arr => arr.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
@@ -128,6 +163,16 @@ function lineChart(cur, prev) {
 
 // ================= 勤務管理（管制ボード） =================
 function boardView() {
+  if (!state.sites.length)
+    return blank('📍', '配置先がまだ登録されていません',
+      '管制ボードは「どの現場に、誰を置くか」を決める画面です。<br>'
+      + 'まず発注元となる<b>得意先</b>を登録し、そのうえで現場（配置先）を追加してください。',
+      state.clients.length ? ['m-site', '配置先を登録する →'] : ['m-client', '得意先の登録から始める →']);
+  if (!state.guards.length)
+    return blank('👥', '隊員がまだ登録されていません',
+      '配置先は ' + state.sites.length + ' 件登録済みです。あとは配置する隊員を登録すれば、<br>'
+      + 'ここでドラッグ&ドロップして勤務予定を組めるようになります。',
+      ['m-guard', '隊員を登録する →']);
   const date = ui.boardDate;
   const shifts = dayShifts(date);
   const assignedIds = new Set(shifts.map(s => s.guardId));
@@ -150,7 +195,7 @@ function boardView() {
     const qualOK = !st.reqQual || list.some(s => guard(s.guardId).quals.includes(st.reqQual));
     return `<div class="site-card ${short ? 'site-short' : ''}" data-drop-site="${st.id}">
       <div class="site-head">
-        <div><span class="pc-chip-kind">${st.kind}</span> <b>${esc(st.name)}</b></div>
+        <div><span class="pc-chip-kind">${kindNo(st)}</span> <b>${esc(st.name)}</b></div>
         <span class="${short ? 'staff-short' : 'staff-ok'}">${list.length}/${need}名${short ? ' ⚠ 不足' : ' ✓'}</span>
       </div>
       <div class="site-meta">
@@ -194,6 +239,10 @@ function boardView() {
 
 // ================= 上下番モニター =================
 function monitorView() {
+  if (!state.shifts.length)
+    return blank('📡', '今日の勤務予定がありません',
+      '上下番モニターは、当日の出発・上番・下番をリアルタイムに映す画面です。<br>管制ボードで今日の勤務予定を入れると、ここに並びます。',
+      ['board', '管制ボードへ →']);
   const date = ui.boardDate;
   const shifts = dayShifts(date).sort((a, b) => a.start.localeCompare(b.start));
   const now = nowMin();
@@ -235,6 +284,10 @@ function monitorView() {
 
 // ================= 請求管理 =================
 function billingView() {
+  if (!state.shifts.length)
+    return blank('💴', '請求できる勤務がまだありません',
+      '請求は「その日に配置した勤務」から自動で組み立てます。<br>配置先と単価を登録し、管制ボードで勤務予定を入れてください。',
+      state.sites.length ? ['board', '勤務予定を入力する →'] : ['m-site', '配置先を登録する →']);
   const date = ui.boardDate;
   let T = { work: 0, extra: 0, tax: 0, total: 0 };
   const rows = state.sites.map(st => {
@@ -313,6 +366,10 @@ function depositView() {
 
 // ================= 給与管理（PC） =================
 function payrollView() {
+  if (!state.shifts.length)
+    return blank('💰', '給与を計算する勤務がまだありません',
+      '給与は打刻と勤務予定から計算します。隊員を登録し、勤務予定を入れると<br>ここに支給額・控除・差引支給が並びます。',
+      state.guards.length ? ['board', '勤務予定を入力する →'] : ['m-guard', '隊員を登録する →']);
   const rows = state.guards.map(g => {
     const p = calcPay(g);
     return `<tr>
@@ -374,18 +431,42 @@ function leaveAdminView() {
     <p class="pc-muted">状態は隊員アプリの休暇申請カレンダーに即時反映されます（紺=申請済／橙=交渉可／緑=承認済み／赤=棄却）。</p>`;
 }
 
+/** 何も無い画面を「壊れている」ではなく「これから始める」に見せる。
+ *  cta は [遷移先タブID, ボタン文言]。次の一手を必ず1つだけ示す */
+export function blank(ic, title, body, cta, sub) {
+  return `<div class="pc-blank">
+    <div class="pc-blank-ic">${ic}</div>
+    <b>${esc(title)}</b>
+    <p>${body}</p>
+    ${cta ? `<button class="pc-btn-navy" data-action="atab" data-tab="${cta[0]}">${esc(cta[1])}</button>` : ''}
+    ${sub ? `<p class="pc-blank-sub">${sub}</p>` : ''}
+  </div>`;
+}
+
 // ================= 教育管理 =================
+/** 教育記録の隊員。名前参照（新規登録）と旧来のID参照の両方を引く */
+const eduGuard = e => state.guards.find(g => g.name === e.guardName)
+  || state.guards.find(g => g.id === e.guardId) || { name: e.guardName || '（未選択）' };
+
 function eduView() {
-  const alerts = state.education.filter(e => e.done / e.required < 0.6);
+  if (!state.education.length)
+    return blank('👨‍🏫', '教育記録がまだありません',
+      '警備業法21条により、新任20時間・現任は年度ごとに10時間の教育が必要です。<br>隊員を登録したあと、ここに実施状況を記録してください。',
+      state.guards.length ? ['m-edu', '＋ 教育記録を追加'] : ['m-guard', 'まず隊員を登録する →']);
+  const alerts = state.education.filter(e => Number(e.done) / Number(e.required || 1) < 0.6);
   return `
-    ${alerts.length ? `<div class="pc-banner-warn">⚠ 法定教育の未達が <b>${alerts.length}名</b>：${alerts.map(e => esc(guard(e.guardId).name)).join('、')}（年度末 2027/3/31 までに現任10h／新任20h）</div>` : ''}
+    ${alerts.length ? `<div class="pc-banner-warn">⚠ 法定教育の未達が <b>${alerts.length}名</b>：${alerts.map(e => esc(eduGuard(e).name)).join('、')}（年度末までに現任10h／新任20h）</div>` : ''}
+    <div class="pc-pager"><span class="pc-muted small">${state.education.length}件</span>
+      <span style="margin-left:auto"></span>
+      <button class="pc-btn" data-action="report-out" data-report="edu-sheet">🖨 教育実施簿</button>
+      <button class="pc-btn-navy" data-action="atab" data-tab="m-edu">教育記録を編集 →</button></div>
     <div class="pc-card">
       ${state.education.map(e => {
-        const g = guard(e.guardId);
-        const pct = Math.round(e.done / e.required * 100);
+        const g = eduGuard(e);
+        const pct = Math.min(100, Math.round(Number(e.done) / Number(e.required || 1) * 100)) || 0;
         const low = pct < 60;
         return `<div class="edu-row">
-          <span class="edu-name"><b>${esc(g.name)}</b> <span class="${e.type === '新任' ? 'pc-chip-kind' : 'pc-chip-muted'}">${e.type}</span></span>
+          <span class="edu-name"><b>${esc(g.name)}</b> <span class="${e.type === '新任' ? 'pc-chip-kind' : 'pc-chip-muted'}">${esc(e.type || '')}</span></span>
           <span class="pc-bar edu-bar"><span class="pc-bar-fill ${low ? 'bar-warn' : ''}" style="width:${pct}%"></span></span>
           <span class="small">${e.done}/${e.required}h</span>
           ${low ? '<span class="pc-chip-warn">⚠ 要対応</span>' : '<span class="pc-chip-ok">✓</span>'}

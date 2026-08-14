@@ -66,6 +66,7 @@ export const GROUPS = [
       { id: 'm-contract', ic: '📜', name: '警備契約書マスタ', kind: 'master', master: 'contract' },
       { id: 'm-gtype', ic: '🏷', name: '隊員区分マスタ', kind: 'master', master: 'guardType' },
       { id: 'm-guard', ic: '👥', name: '隊員マスタ', kind: 'master', master: 'guardM' },
+      { id: 'm-edu', ic: '👨‍🏫', name: '教育記録', kind: 'master', master: 'eduM' },
       { id: 'm-qual', ic: '🎖', name: '資格マスタ', kind: 'master', master: 'qual' },
       { id: 'm-weather', ic: '☀️', name: '天候マスタ', kind: 'master', master: 'weather' },
     ],

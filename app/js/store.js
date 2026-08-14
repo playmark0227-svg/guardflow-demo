@@ -1,4 +1,4 @@
-import { seedData } from './data.js';
+import { seedData, emptyData, demoData } from './data.js';
 import { seedMasters, MASTERS } from './masters.js';
 import { toKey, todayKey, uid } from './util.js';
 
@@ -31,7 +31,7 @@ export const ui = {
   staff: null,               // 操作中の担当者コード（権限でメニューを絞る）
 };
 
-export let state = load();
+export const state = load();
 
 function load() {
   try {
@@ -62,7 +62,34 @@ export function commit() {
 export function subscribe(fn) { listeners.add(fn); }
 function emit() { listeners.forEach(f => f()); }
 export function rerender() { emit(); }
-export function resetDemo() { state = seedData(); commit(); }
+/** state は参照ごと差し替えず中身を入れ替える。
+ *  変数を再代入すると、既に state を掴んでいる側が古いオブジェクトを見続けるため */
+function replaceState(next) {
+  Object.keys(state).forEach(k => { if (!(k in next)) delete state[k]; });
+  Object.assign(state, next);
+  ui.adminTab = 'dash';
+  ui.detailShift = null; ui.selectedGuard = null; ui.groupId = null; ui.itemId = null;
+  ui.payMonth = null; ui.ledgerClient = null; ui.masterQ = ''; ui.q = '';
+  commit();
+}
+export function resetDemo() { replaceState(emptyData()); }
+/** デモデータを入れ直す（機能説明用）。初期状態との行き来を1クリックで */
+export function loadDemo() { replaceState(demoData()); }
+export const isDemo = () => !!state.demo;
+
+/** 初期セットアップの進み具合。未完了の先頭がその会社の「次にやること」 */
+export function setupSteps() {
+  const c = state.masters.company[0] || {};
+  return [
+    { id: 'm-company', name: '自社情報', hint: '会社名・認定番号', done: !!c.name },
+    { id: 'm-branch', name: '支店・営業所', hint: '隊員の所属先', done: (state.masters.branch || []).length > 0 },
+    { id: 'm-staff', name: '担当者', hint: '管制・事務の担当', done: (state.masters.staff || []).length > 0 },
+    { id: 'm-guard', name: '隊員', hint: '氏名・時給・資格', done: state.guards.length > 0 },
+    { id: 'm-client', name: '得意先', hint: '発注元・締日', done: state.clients.length > 0 },
+    { id: 'm-site', name: '配置先', hint: '現場・時間・単価', done: state.sites.length > 0 },
+    { id: 'board', name: '勤務予定', hint: '隊員を現場に配置', done: state.shifts.length > 0 },
+  ];
+}
 
 // ---- 打刻・勤怠報告 ----
 export function punch(shiftId, type, geo, memo) {
@@ -94,14 +121,16 @@ export function checkAssign(date, siteId, guardId) {
   const wm = (state.masters.work || []).find(w => w.name === (state.sites.find(x => x.id === siteId) || {}).work);
   if (wm && wm.dup !== false && dayShifts.some(s => s.guardId === guardId))
     return { block: `ダブルブッキング：${g.name}さんは同日の別現場に配置済みです` };
+  const st = state.sites.find(x => x.id === siteId) || {};
   if (g.siteNG && g.siteNG[siteId])
     return { block: `配置NG（出入り禁止）：${g.siteNG[siteId]}` };
-  const assigned = dayShifts.filter(s => s.siteId === siteId).map(s => s.guardId);
-  const pairId = assigned.find(id => (g.pairNG || []).includes(id));
-  if (pairId) {
-    const p = state.guards.find(x => x.id === pairId);
-    return { block: `相性NG：${g.name}さんと${p.name}さんは同一現場に配置できません` };
-  }
+  if ((g.siteNGNames || []).includes(st.name))
+    return { block: `配置NG（出入り禁止）：${g.name}さんは${st.name}に配置できません` };
+  const mates = dayShifts.filter(s => s.siteId === siteId)
+    .map(s => state.guards.find(x => x.id === s.guardId)).filter(Boolean);
+  const ng = mates.find(p => (g.pairNGNames || []).includes(p.name)
+    || (g.pairNG || []).includes(p.id) || (p.pairNGNames || []).includes(g.name));
+  if (ng) return { block: `相性NG：${g.name}さんと${ng.name}さんは同一現場に配置できません` };
   // オプション：承認済みの休暇日には配置できないようにする
   if (state.options.blockPaid
       && state.leaves.some(l => l.guardId === guardId && l.date === date && l.status === 'approved'))
@@ -192,6 +221,25 @@ export function masterSet(mid, i, key, value) {
   rows[i][key] = value;
   commit();
 }
+/** 複数選択の1項目をON/OFFする。相性NGは相手側にも入れて対称に保つ */
+export function masterMulti(mid, i, key, value, on) {
+  const rows = masterRows(mid);
+  const row = rows[i];
+  if (!row) return;
+  const cur = Array.isArray(row[key]) ? row[key].slice() : [];
+  const next = on ? (cur.includes(value) ? cur : [...cur, value]) : cur.filter(x => x !== value);
+  row[key] = next;
+  if (key === 'pairNGNames') {                       // 相手の隊員にも同じ関係を入れる
+    const me = row.name;
+    state.guards.forEach(g => {
+      if (g.name !== value) return;
+      const l = Array.isArray(g.pairNGNames) ? g.pairNGNames.slice() : [];
+      g.pairNGNames = on ? (l.includes(me) ? l : [...l, me]) : l.filter(x => x !== me);
+    });
+  }
+  commit();
+}
+
 export function masterAdd(mid) {
   const rows = masterRows(mid);
   const m = MASTERS[mid] || {};
@@ -201,7 +249,7 @@ export function masterAdd(mid) {
 /** 業務データは空だと他画面が落ちるので、最低限の初期値を入れて追加する */
 function defaultsFor(m) {
   if (m.store === 'sites') return { name: '（新しい配置先）', start: '08:00', end: '17:00', brk: 60, need: 1, bill: 2000, kind: '2号', mark: '新' };
-  if (m.store === 'guards') return { name: '（新しい隊員）', rate: 1200, quals: [], hiredAt: todayKey(), office: (state.masters.branch || [{}])[0].name || '' };
+  if (m.store === 'guards') return { name: '（新しい隊員）', rate: 1200, quals: [], hiredAt: todayKey(), office: ((state.masters.branch || [])[0] || {}).name || '' };
   if (m.store === 'clients') return { name: '（新しい得意先）', honor: '御中', tax: '外税', close: '月末', payDay: '月末', payType: '振込' };
   return {};
 }
