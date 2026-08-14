@@ -418,7 +418,7 @@ function leaveAdminView() {
     <div class="pc-card pc-table-wrap"><table class="pc-table">
       <thead><tr><th>隊員</th><th>希望日</th><th>理由</th><th>状態</th><th>操作</th></tr></thead>
       <tbody>${state.leaves.map(l => `<tr>
-        <td><b>${esc(guard(l.guardId).name)}</b></td>
+        <td><b>${esc((guard(l.guardId) || { name: '（削除された隊員）' }).name)}</b></td>
         <td>${fmtMD(l.date)}</td>
         <td>${esc(l.reason)}</td>
         <td><span class="st-chip ${st[l.status][1]}">${st[l.status][0]}</span></td>
@@ -664,7 +664,7 @@ export function renderAdmin(el) {
           </select>
         </label>
         ${currentAuth() ? `<div class="pc-authnote">${esc((currentStaff() || {}).role)}権限で表示中${hidden ? `（${hidden}メニュー非表示）` : ''}</div>` : ''}
-        <div class="pc-company">${esc((state.masters.company[0] || {}).name || 'GuardFlow警備株式会社')}</div>
+        <button class="pc-company" data-action="atab" data-tab="m-company">${esc((state.masters.company[0] || {}).name || '（自社名を登録する）')}</button>
       </div>
     </aside>
     <div class="pc-main">

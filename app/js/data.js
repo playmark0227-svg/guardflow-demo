@@ -165,10 +165,19 @@ export function demoData() {
  *  金額は会社ごとに違うので、項目名は残して金額は 0 にする（初期値のまま誤って請求・支給しないため）。 */
 export function emptyData() {
   const m = seedMasters();
-  ['branch', 'staff', 'siteRate', 'guardRate'].forEach(k => { m[k] = []; });
+  // その会社にしか無いもの
+  ['branch', 'staff', 'siteRate', 'bank', 'zip'].forEach(k => { m[k] = []; });
   m.company = [{}];                                  // 1件だけの自社マスタは空の行を残して入力させる
-  ['qual', 'payItem', 'dedItem', 'billItem'].forEach(k =>
-    (m[k] || []).forEach(r => { if ('allow' in r) r.allow = 0; if ('amount' in r) r.amount = 0; }));
+  // 名前は残して金額だけ0にする。初期値のまま気づかず請求・支給するのを防ぐ
+  ['qual', 'payItem', 'dedItem', 'billItem', 'guardRate'].forEach(k =>
+    (m[k] || []).forEach(r => ['allow', 'amount', 'unit', 'ot', 'hour', 'night', 'nightOt', 'day']
+      .forEach(f => { if (f in r) r[f] = 0; })));
+  // 契約書は条項名だけ残し、文言は自社で決めてもらう（他社の運用が刷られないように）
+  (m.contract || []).forEach(r => { r.body = ''; });
+  // 週締めの支払日は自社の資金繰り。締め名称と締め曜日（週40h超の起算）は残す
+  (m.weekClose || []).forEach(r => { r.payDay = ''; });
+  // 協会けんぽの料率は都道府県別。県名を外して、自県の率に直してもらう
+  (m.insurance || []).forEach(r => { r.name = r.name.replace(/（.*?）/, ''); });
   return {
     seedDate: todayKey(), offline: false, demo: false,
     clients: [], guards: [], sites: [], shifts: [], education: [], notices: [], leaves: [],

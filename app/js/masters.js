@@ -81,10 +81,15 @@ export const MASTERS = {
       { k: 'code', l: '自社コード', w: 90 }, { k: 'name', l: '会社名', w: 220, req: true },
       { k: 'zip', l: '郵便番号', w: 100 }, { k: 'addr', l: '住所', w: 260 },
       { k: 'tel', l: '電話番号', w: 130 }, { k: 'fax', l: 'FAX番号', w: 130 },
-      { k: 'ceo', l: '代表者', w: 120 }, { k: 'permit', l: '認定番号', w: 160 },
+      { k: 'ceo', l: '代表者', w: 120 }, { k: 'permit', l: '認定番号', w: 190 },
+      { k: 'kana', l: 'カナ社名', w: 190, hint: '半角カナ・振込データ用' },
+      { k: 'payerCode', l: '委託者コード', w: 120, hint: '銀行から通知される10桁' },
+      { k: 'payerBank', l: '振込元 銀行', t: 'sel', optFrom: 'bank', w: 160 },
+      { k: 'payerAcct', l: '振込元 口座番号', w: 140 },
       { k: 'seal', l: '請求書に自社印を印字', t: 'chk', w: 150 },
     ],
-    seed: [{ code: '01', name: 'GuardFlow警備株式会社', zip: '231-0057', addr: '神奈川県横浜市中区曙町2-19-1', tel: '045-000-0000', fax: '045-000-0001', ceo: '守屋 健一', permit: '神奈川県公安委員会 第00000000号', seal: true }],
+    note: '会社名・認定番号は請求書・給与明細・警備員名簿・契約書などすべての帳票に印字されます。カナ社名と振込元口座は全銀データに使われます',
+    seed: [{ code: '01', name: 'GuardFlow警備株式会社', zip: '231-0057', addr: '神奈川県横浜市中区曙町2-19-1', tel: '045-000-0000', fax: '045-000-0001', ceo: '守屋 健一', permit: '神奈川県公安委員会 第00000000号', kana: 'ｶ)ｶﾞｰﾄﾞﾌﾛｰｹｲﾋﾞ', payerCode: '0123456789', payerBank: '横浜銀行', payerAcct: '1234567', seal: true }],
   },
   branch: {
     name: '支店マスタ', key: 'code',
@@ -130,7 +135,8 @@ export const MASTERS = {
     ],
   },
   zip: {
-    name: '郵便番号マスタ', key: 'zip', bulk: '一括取込',
+    name: '郵便番号マスタ', key: 'zip', bulk: 'サンプルを取り込む',
+    note: '実運用では日本郵便が公開する全国データ（KEN_ALL）を取り込みます。このデモはブラウザ内保存のため容量に収まる範囲だけを扱います',
     fields: [{ k: 'zip', l: '郵便番号', w: 120, req: true }, { k: 'addr', l: '住所', w: 360 }],
     seed: [
       { zip: '231-0057', addr: '神奈川県横浜市中区曙町' }, { zip: '225-0002', addr: '神奈川県横浜市青葉区美しが丘' },
@@ -140,6 +146,7 @@ export const MASTERS = {
   },
   bank: {
     name: '金融機関マスタ', key: 'code',
+    note: '実運用では全銀協の金融機関コード一覧を取り込みます。ここには振込に使う銀行・支店を登録してください',
     fields: [
       { k: 'code', l: '銀行コード', w: 100, req: true }, { k: 'name', l: '銀行名', w: 180, req: true },
       { k: 'bcode', l: '支店コード', w: 100 }, { k: 'bname', l: '支店名', w: 160 },

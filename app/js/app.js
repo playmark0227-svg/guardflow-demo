@@ -9,7 +9,7 @@ import { renderAdmin } from './admin.js';
 import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
-  dmHTML, codebookHTML, paidHTML, setMastersRef,
+  dmHTML, codebookHTML, paidHTML, setMastersRef, co,
   nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
 } from './prints.js';
 import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js';
@@ -355,10 +355,15 @@ function download(name, text, mime) {
   URL.revokeObjectURL(url);
   toast(`\u2713 ${name} を書き出しました`);
 }
+const csvVal = v => Array.isArray(v) ? v.join('／') : v == null ? '' : v;
+
 function exportCsv(kind) {
   const pick = {
-    guards: () => [Object.keys(state.guards[0]), ...state.guards.map(g => Object.values(g))],
-    sites: () => [Object.keys(state.sites[0]), ...state.sites.map(s => Object.values(s))],
+    // 0件でも見出し行だけのCSVを出す（取り込み用の雛形にもなる）
+    guards: () => [MASTERS.guardM.fields.map(f => f.l),
+      ...state.guards.map(g => MASTERS.guardM.fields.map(f => csvVal(g[f.k])))],
+    sites: () => [MASTERS.siteM.fields.map(f => f.l),
+      ...state.sites.map(x => MASTERS.siteM.fields.map(f => csvVal(x[f.k])))],
     shifts: () => [['date', 'siteId', 'guardId', 'start', 'end', 'punches'],
       ...state.shifts.map(s => [s.date, s.siteId, s.guardId, s.start, s.end, s.punches.length])],
     masters: () => { const o = [['master', 'row']]; Object.entries(state.masters).forEach(([k, v]) => v.forEach(r => o.push([k, JSON.stringify(r)]))); return o; },
@@ -367,11 +372,11 @@ function exportCsv(kind) {
   download(`${kind}.csv`, pick().map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n'), 'text/csv');
 }
 function masterSheetHTML(mid) {
-  const m = MASTERS[mid], rows = state.masters[mid] || [];
+  const m = MASTERS[mid], rows = masterRows(mid);
   const v = (f, r) => f.t === 'chk' ? (r[f.k] ? '✓' : '') : (r[f.k] ?? '');
   return `<div class="payslip">
     <h1>${esc(m.name)}</h1>
-    <p class="ps-meta">${rows.length}件　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${rows.length}件　／　${esc(co().name || "（自社マスタ未設定）")}</p>
     <table class="ps-table">
       <tr>${m.fields.map(f => `<th>${esc(f.l)}</th>`).join('')}</tr>
       ${rows.map(r => `<tr>${m.fields.map(f => `<td>${esc(v(f, r))}</td>`).join('')}</tr>`).join('')}

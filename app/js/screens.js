@@ -1,8 +1,10 @@
 import { state, ui, commit, paidGrantOf, masterRows } from './store.js';
+import { blank } from './admin.js';
 import { MASTERS } from './masters.js';
 import { GROUPS, findGroup } from './menu.js';
 import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js';
 import { wageOf, periodRows, clientTotals, needOf } from './gantt.js';
+import { co } from './prints.js';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -264,6 +266,8 @@ export function zenginView() {
   }).filter(x => x.amt > 0);
   const total = lines.reduce((a, x) => a + x.amt, 0);
 
+  const c = co();
+  const ready = !!(c.kana || c.name) && !!c.payerAcct;
   const recs = zenginRecords();
   const head = recs[0], body = recs.slice(1, -1);
 
@@ -271,7 +275,8 @@ export function zenginView() {
     <div class="pc-pager"><b>振込データ作成（全銀フォーマット）</b>
       <span class="pc-muted small">${m.replace('-', '年')}月度</span>
       <span style="margin-left:auto"></span>
-      <button class="pc-btn-navy" data-action="zengin-dl">💾 テキストをダウンロード</button>
+      ${ready ? '<button class="pc-btn-navy" data-action="zengin-dl">💾 テキストをダウンロード</button>'
+      : '<button class="pc-btn" data-action="atab" data-tab="m-company">⚠ 自社マスタに振込元口座を登録してください →</button>'}
     </div>
     <div class="pc-kpi-row">
       <div class="pc-kpi"><b>${lines.length}件</b><span>振込件数</span></div>
@@ -304,10 +309,12 @@ export function zenginRecords(ym) {
   const num = (v, n) => String(Math.round(Number(v) || 0)).slice(-n).padStart(n, '0');
   const now = new Date();
   // 全銀協「総合振込」形式：ヘッダ(1)／データ(2)／トレーラ(8)／エンド(9)、いずれも120桁
-  const head = '1' + '21' + '0' + num(0, 10) + pad('ｶ)ｶﾞｰﾄﾞﾌﾛｰｹｲﾋﾞ', 40)
+  const c = co();
+  const payer = (state.masters.bank || []).find(x => x.name === c.payerBank) || bank;
+  const head = '1' + '21' + '0' + num(c.payerCode, 10) + pad(kana(c.kana || c.name), 40)
     + num(now.getMonth() + 1, 2) + num(now.getDate(), 2)
-    + num(bank.code, 4) + pad(kana(bank.name), 15)
-    + num(bank.bcode, 3) + pad(kana(bank.bname), 15) + '1' + num(1234567, 7) + pad('', 17);
+    + num(payer.code, 4) + pad(kana(payer.name), 15)
+    + num(payer.bcode, 3) + pad(kana(payer.bname), 15) + '1' + num(c.payerAcct, 7) + pad('', 17);
   const body = lines.map(x => '2'
     + num(x.g.bank || bank.code, 4) + pad(kana(bank.name), 15)
     + num(x.g.branch || bank.bcode, 3) + pad(kana(bank.bname), 15) + num(0, 4)
@@ -387,13 +394,20 @@ export function forecastView(kind) {
 // ===================== 有給管理 =====================
 const paidDays = g => paidGrantOf(g);
 export function paidView(mode) {
+  if (!state.guards.length)
+    return blank('🌴', '隊員がまだ登録されていません',
+      '有給の付与日数は、入社年月日と有給付与マスタ（労基法39条の法定日数）から自動で計算します。<br>'
+      + '隊員マスタに入社年月日を入れると、ここに付与・取得・残と年5日の取得義務が並びます。',
+      ['m-guard', '隊員を登録する →']);
   const rows = state.guards.map(g => {
     const grant = paidDays(g);
     const used = state.leaves.filter(l => l.guardId === g.id && l.status === 'approved').length;
     const left = grant - used;
-    const low = left <= 5;
-    const must = 5 - used;                        // 年5日取得義務（労基法39条7項）
-    return { g, grant, used, left, low, must };
+    // 付与前（入社6か月未満）の隊員に「残0日」「義務未達」を出すと誤解を招く
+    const yet = grant === 0;
+    const low = !yet && left <= 5;
+    const must = yet ? 0 : Math.max(0, 5 - used);  // 年5日取得義務（労基法39条7項）
+    return { g, grant, used, left, low, must, yet };
   });
   if (mode === 'month') {
     const by = new Map();
@@ -404,9 +418,10 @@ export function paidView(mode) {
         <div class="pc-card-head"><b>📍 ${esc(k)}</b><span class="pc-muted">${v.length}名</span></div>
         ${v.map(r => `<div class="edu-row">
           <span class="edu-name"><b>${esc(r.g.name)}</b></span>
-          <span class="pc-bar edu-bar"><span class="pc-bar-fill ${r.must > 0 ? 'bar-warn' : ''}" style="width:${Math.round(r.used / r.grant * 100)}%"></span></span>
+          <span class="pc-bar edu-bar"><span class="pc-bar-fill ${r.must > 0 ? 'bar-warn' : ''}" style="width:${r.grant ? Math.round(r.used / r.grant * 100) : 0}%"></span></span>
           <span class="small">${r.used}/${r.grant}日</span>
-          ${r.must > 0 ? `<span class="pc-chip-warn">⚠ 義務未達 あと${r.must}日</span>` : '<span class="pc-chip-ok">✓</span>'}
+          ${r.yet ? '<span class="pc-chip-muted">付与前</span>'
+            : r.must > 0 ? `<span class="pc-chip-warn">⚠ 義務未達 あと${r.must}日</span>` : '<span class="pc-chip-ok">✓</span>'}
         </div>`).join('')}
       </div>`).join('')}`;
   }
@@ -421,8 +436,9 @@ export function paidView(mode) {
       <tbody>${rows.map(r => `<tr class="${r.must > 0 ? 'row-alert' : ''}">
         <td>${esc(r.g.code)}</td><td><b>${esc(r.g.name)}</b></td><td>${esc(r.g.office)}</td>
         <td>${esc(r.g.hiredAt || '—')}</td><td class="num">${r.grant}日</td><td class="num">${r.used}日</td>
-        <td class="num ${r.low ? 'warn-text' : ''}">${r.left}日</td>
-        <td>${r.must > 0 ? `<span class="pc-chip-warn">あと${r.must}日</span>` : '<span class="pc-chip-ok">✓ 達成</span>'}</td>
+        <td class="num ${r.low ? 'warn-text' : ''}">${r.yet ? '—' : r.left + '日'}</td>
+        <td>${r.yet ? '<span class="pc-chip-muted">付与前（入社6か月未満）</span>'
+          : r.must > 0 ? `<span class="pc-chip-warn">あと${r.must}日</span>` : '<span class="pc-chip-ok">✓ 達成</span>'}</td>
       </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -527,7 +543,7 @@ export function masterPrintView() {
     <div class="pc-cards-grid">
       ${Object.entries(MASTERS).map(([id, m]) => `<button class="pc-report-card" data-action="master-print" data-m="${id}">
         <span class="pc-report-ic">🖨</span><b>${esc(m.name)}</b>
-        <span class="pc-muted small">${(state.masters[id] || []).length}件</span>
+        <span class="pc-muted small">${masterRows(id).length}件</span>
         <span class="pc-chip-ok">PDF出力可</span>
       </button>`).join('')}
     </div>`;

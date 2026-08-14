@@ -216,13 +216,25 @@ export function masterSet(mid, i, key, value) {
   const rows = masterRows(mid);
   if (!rows[i]) return;
   const m = MASTERS[mid];
-  // 得意先名を変えたら、その得意先を参照している配置先も一緒に付け替える
-  if (m && m.store === 'clients' && key === 'name') {
-    const before = rows[i].name;
-    state.sites.forEach(st => { if (st.client === before) st.client = value; });
-    Object.keys(state.deposits).forEach(k => {
-      if (k === before) { state.deposits[value] = state.deposits[k]; delete state.deposits[k]; }
-    });
+  // 名前で参照している箇所は、改名したら一緒に付け替える（放置すると単価や配置NGが無言で外れる）
+  const before = rows[i][key];
+  if (m && key === 'name' && before && before !== value) {
+    if (m.store === 'clients') {
+      state.sites.forEach(st => { if (st.client === before) st.client = value; });
+      if (before in state.deposits) { state.deposits[value] = state.deposits[before]; delete state.deposits[before]; }
+    }
+    if (m.store === 'sites') {
+      (state.masters.siteRate || []).forEach(r => { if (r.site === before) r.site = value; });
+      state.guards.forEach(g => {
+        if (g.siteNGNames) g.siteNGNames = g.siteNGNames.map(x => x === before ? value : x);
+      });
+    }
+    if (m.store === 'guards') {
+      state.guards.forEach(g => {
+        if (g.pairNGNames) g.pairNGNames = g.pairNGNames.map(x => x === before ? value : x);
+      });
+      state.education.forEach(e => { if (e.guardName === before) e.guardName = value; });
+    }
   }
   rows[i][key] = value;
   commit();
@@ -254,8 +266,15 @@ export function masterAdd(mid) {
 }
 /** 業務データは空だと他画面が落ちるので、最低限の初期値を入れて追加する */
 function defaultsFor(m) {
-  if (m.store === 'sites') return { name: '（新しい配置先）', start: '08:00', end: '17:00', brk: 60, need: 1, bill: 2000, kind: '2号', mark: '新' };
+  if (m.store === 'sites') return {
+    name: '（新しい配置先）', start: '08:00', end: '17:00', brk: 60, need: 1, bill: 0, mark: '新',
+    client: (state.clients[0] || {}).name || '',
+    kind: ((state.masters.bizType || [])[1] || {}).name || '',
+    // 勤務種別が空だとダブルブッキング判定が引けなくなるため必ず既定を入れる
+    work: ((state.masters.work || [])[0] || {}).name || '',
+  };
   if (m.store === 'guards') return { name: '（新しい隊員）', rate: 1200, quals: [], hiredAt: todayKey(), office: ((state.masters.branch || [])[0] || {}).name || '' };
+  if (m.store === 'education') return { type: '現任', required: 10, done: 0, at: todayKey() };
   if (m.store === 'clients') return { name: '（新しい得意先）', honor: '御中', tax: '外税', close: '月末', payDay: '月末', payType: '振込' };
   return {};
 }
@@ -269,6 +288,8 @@ export function masterDel(mid, i) {
     return `${row.name} には勤務データがあるため削除できません`;
   if (m.store === 'guards' && state.shifts.some(s => s.guardId === row.id))
     return `${row.name} には勤務データがあるため削除できません`;
+  if (m.store === 'guards' && state.leaves.some(l => l.guardId === row.id))
+    return `${row.name} には休暇申請があるため削除できません`;
   if (m.store === 'clients' && state.sites.some(s => s.client === row.name))
     return `${row.name} には配置先が紐づいているため削除できません`;
   rows.splice(i, 1);

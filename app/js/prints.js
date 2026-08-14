@@ -1,4 +1,4 @@
-import { state } from './store.js';
+import { state, masterRows } from './store.js';
 import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js';
 import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js';
 
@@ -10,6 +10,10 @@ export function payMonths() {
 }
 
 // マスタから料率を引く。見つからないときだけ既定値に落とす
+/** 自社マスタ。帳票の発行元はすべてここから引く（未登録なら空欄と分かる文言を出す） */
+export const co = () => state.masters.company[0] || {};
+const coName = () => co().name || '（自社マスタ未設定）';
+
 const rateOf = (name, key, fb) => {
   const r = (state.masters.insurance || []).find(x => x.name.startsWith(name));
   return r ? Number(r[key]) / 100 : fb;
@@ -126,7 +130,7 @@ export function payslipPrintHTML(g, ym) {
   return `
   <div class="payslip">
     <h1>給与支給明細書</h1>
-    <p class="ps-meta">${p.month.replace('-', '年')}月度　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${p.month.replace('-', '年')}月度　／　${esc(coName())}</p>
     <p class="ps-name">${esc(g.code)}　${esc(g.name)} 殿</p>
     <table class="ps-table">
       <tr><th colspan="2">勤怠</th></tr>
@@ -160,7 +164,7 @@ export function invoiceHTML(siteId, date) {
   return `
   <div class="payslip">
     <h1>請　求　書</h1>
-    <p class="ps-meta">発行日：${fmtMD(date)}　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">発行日：${fmtMD(date)}　／　${esc(coName())}</p>
     <p class="ps-name">${esc(site.client)} 御中</p>
     <p>件名：${esc(site.name)}（${site.kind}警備業務）</p>
     <table class="ps-table">
@@ -170,7 +174,7 @@ export function invoiceHTML(siteId, date) {
       <tr><td>消費税（10%）</td><td style="text-align:right">${yen(tax)}</td></tr>
       <tr class="ps-net"><td><b>合計金額</b></td><td style="text-align:right"><b>${yen(b.total)}</b></td></tr>
     </table>
-    <p>お振込先：デモ銀行 本店営業部（普）0000000　カ）ガードフローケイビ</p>
+    <p>${co().payerBank && co().payerAcct ? `お振込先：${esc(co().payerBank)}（普）${esc(co().payerAcct)}　${esc(co().kana || co().name || '')}` : ''}</p>
     <p class="ps-foot">本請求書はデモデータにより自動生成されています。</p>
   </div>`;
 }
@@ -204,7 +208,7 @@ export function wageSheetHTML() {
   return `
   <div class="payslip">
     <h1>勤務実績・賃金計算表</h1>
-    <p class="ps-meta">対象期間：${period}　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">対象期間：${period}　／　${esc(coName())}</p>
     <table class="ps-table">
       <tr><th>コード</th><th>氏名 / 勤務時間帯</th><th style="text-align:right">時給</th>
         <th style="text-align:right">実働(h)</th><th style="text-align:right">深夜(h)</th>
@@ -228,7 +232,7 @@ export function rosterHTML() {
   return `
   <div class="payslip">
     <h1>警備員名簿</h1>
-    <p class="ps-meta">GuardFlow警備株式会社（デモ）　／　作成日：自動生成</p>
+    <p class="ps-meta">${esc(coName())}　／　作成日：自動生成</p>
     <table class="ps-table">
       <tr><th>隊員コード</th><th>氏名</th><th>年齢</th><th>保有資格</th></tr>
       ${state.guards.map(g => `<tr>
@@ -251,7 +255,7 @@ export function scheduleHTML(date) {
   return `
   <div class="payslip">
     <h1>配置予定表</h1>
-    <p class="ps-meta">${fmtMD(date)}　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${fmtMD(date)}　／　${esc(coName())}</p>
     <table class="ps-table">
       <tr><th>現場</th><th>時間</th><th>人数</th><th>天候</th><th>配置隊員</th></tr>
       ${rows}
@@ -265,14 +269,14 @@ export function scheduleHTML(date) {
 const empty = (title, msg) => `
   <div class="payslip">
     <h1>${title}</h1>
-    <p class="ps-meta">${fmtMD(todayKey())}　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${fmtMD(todayKey())}　／　${esc(coName())}</p>
     <p style="margin:28px 0;padding:18px;border:1px dashed #bbb;border-radius:6px;color:#666">${msg}</p>
   </div>`;
 
 const P = (title, meta, head, rows, foot) => `
   <div class="payslip">
     <h1>${title}</h1>
-    <p class="ps-meta">${meta}　／　GuardFlow警備株式会社（デモ）</p>
+    <p class="ps-meta">${meta}　／　${esc(coName())}</p>
     <table class="ps-table"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows}</table>
     <p class="ps-foot">${foot || '本帳票はデモデータにより自動生成されています。'}</p>
   </div>`;
@@ -363,17 +367,20 @@ export function payslipAllHTML(ym) {
 /** DM印刷（得意先宛の宛名ラベル） */
 export function dmHTML() {
   const seen = new Set();
-  const rows = state.sites.filter(s => !seen.has(s.client) && seen.add(s.client)).map(s =>
-    `<tr><td>${esc(s.addrFull ? s.addrFull.slice(0, 3) : '')}</td><td>${esc(s.addrFull || s.addr)}</td>
-     <td><b>${esc(s.client)}</b> 御中</td></tr>`).join('');
-  return P('D M 印 刷（宛名一覧）', `${seen.size}件`, ['都道府県', '住所', '宛名'], rows,
+  const list = state.clients.length ? state.clients
+    : state.sites.filter(s => !seen.has(s.client) && seen.add(s.client)).map(s => ({ name: s.client, addr: s.addrFull || s.addr }));
+  if (!list.length) return empty('D M 印 刷（宛名一覧）', '得意先が登録されていません。マスタ管理 → 得意先マスタ から登録してください。');
+  const rows = list.map(c =>
+    `<tr><td>${esc((c.addr || '').slice(0, 3))}</td><td>${esc(c.addr || '')}</td>
+     <td><b>${esc(c.name)}</b> ${esc(c.honor || '御中')}</td></tr>`).join('');
+  return P('D M 印 刷（宛名一覧）', `${list.length}件`, ['都道府県', '住所', '宛名'], rows,
     'フリガナ順（五十音）で出力されます。実機では郵便番号バーコードにも対応します。');
 }
 
 /** コードブック印刷（各マスタのコード一覧） */
 export function codebookHTML() {
   const parts = Object.entries(MASTERS_REF()).map(([id, m]) => {
-    const rows = (state.masters[id] || []).slice(0, 12);
+    const rows = masterRows(id).slice(0, 12);
     if (!rows.length) return '';
     const f = m.fields.slice(0, 3);
     return `<h2 class="cb-h">${esc(m.name)}</h2>
@@ -381,7 +388,7 @@ export function codebookHTML() {
       ${rows.map(r => `<tr>${f.map(x => `<td>${esc(x.t === 'chk' ? (r[x.k] ? '✓' : '') : (r[x.k] ?? ''))}</td>`).join('')}</tr>`).join('')}</table>`;
   }).join('');
   return `<div class="payslip"><h1>コ ー ド ブ ッ ク</h1>
-    <p class="ps-meta">GuardFlow警備株式会社（デモ）</p>${parts}
+    <p class="ps-meta">${esc(coName())}</p>${parts}
     <p class="ps-foot">各マスタの先頭12件を抜粋しています。</p></div>`;
 }
 let _M = null;
@@ -503,7 +510,7 @@ export function contractHTML(siteId) {
     <p class="ps-name">${esc(st.client)} ${esc(cl.honor || '御中')}</p>
     <p>下記のとおり警備業務の委託契約を締結します。</p>
     <table class="ps-table"><tr><th>項番</th><th>記載事項</th><th>内容</th></tr>${rows}</table>
-    <p style="margin-top:18px">受託者：GuardFlow警備株式会社（デモ）　神奈川県公安委員会 第00000000号</p>
+    <p style="margin-top:18px">受託者：${esc(coName())}${co().permit ? '　' + esc(co().permit) : ''}</p>
     <p class="ps-foot">警備業法第19条は、契約締結前と締結時の2度の書面交付を義務づけています。本書はデモデータによる自動生成です。</p>
   </div>`;
 }
