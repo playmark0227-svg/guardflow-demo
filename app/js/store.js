@@ -2,7 +2,10 @@ import { seedData, emptyData, demoData } from './data.js';
 import { seedMasters, MASTERS } from './masters.js';
 import { toKey, todayKey, uid } from './util.js';
 
-const KEY = 'guardflow-demo-v3';
+// 保存キー。データの形を変えたら上げる。
+// 古い端末に残ったデモデータで初期状態が見えなくなるのを防ぐ
+const KEY = 'guardflow-v4';
+try { ['guardflow-demo-v3', 'guardflow-demo-v2'].forEach(k => localStorage.removeItem(k)); } catch (e) { /* 非対応環境 */ }
 const listeners = new Set();
 
 // 画面状態（永続化しない）
@@ -32,6 +35,9 @@ export const ui = {
 };
 
 export const state = load();
+// 初回は即座に書き出す。保存できない環境（プライベートブラウズなど）を
+// 最初の入力時ではなく起動時に知らせるため
+try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* commit() が拾う */ }
 
 function load() {
   try {
