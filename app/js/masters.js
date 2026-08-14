@@ -46,7 +46,7 @@ export const MASTERS = {
       { k: 'start', l: '開始', w: 90, hint: 'HH:MM' }, { k: 'end', l: '終了', w: 90, hint: 'HH:MM' },
       { k: 'brk', l: '所定休憩(分)', t: 'num', w: 110 }, { k: 'need', l: '必要人数', t: 'num', w: 100 },
       { k: 'reqQual', l: '必要資格', t: 'sel', optFrom: 'qual', w: 190 },
-      { k: 'bill', l: '請求単価(円/h)', t: 'yen', w: 130 },
+      { k: 'bill', l: '請求単価(円/h)', t: 'yen', w: 130, req: true },
       { k: 'night', l: '夜間現場', t: 'chk', w: 90 },
       { k: 'addrFull', l: '住所', w: 260 },
       { k: 'note', l: '集合の注意', w: 220 },
@@ -65,7 +65,7 @@ export const MASTERS = {
       { k: 'age', l: '年齢', t: 'num', w: 80 },
       { k: 'hiredAt', l: '入社年月日', t: 'date', w: 140 },
       { k: 'rateRank', l: '単価ランク', t: 'sel', opt: ['A', 'B', 'C', 'D'], w: 100 },
-      { k: 'rate', l: '時給(円)', t: 'yen', w: 110 },
+      { k: 'rate', l: '時給(円)', t: 'yen', w: 110, req: true },
       { k: 'quals', l: '保有資格', t: 'multi', optFrom: 'qual', w: 170,
         emptyHint: '資格マスタに資格がありません' },
       { k: 'paidLeaveLeft', l: '有給残(日)', t: 'num', w: 100 },
@@ -336,7 +336,7 @@ export const MASTERS = {
     ],
   },
   payItem: {
-    name: '支払項目マスタ', key: 'name',
+    name: '支払項目マスタ', key: 'name', quickTitle: '支給項目を追加', quick: ['name', 'kind', 'amount', 'base'],
     fields: [
       { k: 'name', l: '支払項目名', w: 180, req: true },
       { k: 'kind', l: '区分', t: 'sel', opt: ['固定', '変動'], w: 100 },
@@ -354,7 +354,7 @@ export const MASTERS = {
     ],
   },
   dedItem: {
-    name: '控除項目マスタ', key: 'name',
+    name: '控除項目マスタ', key: 'name', quickTitle: '控除項目を追加', quick: ['name', 'kind', 'amount'],
     fields: [
       { k: 'name', l: '控除項目名', w: 180, req: true },
       { k: 'kind', l: '区分', t: 'sel', opt: ['法定', '任意'], w: 100 },
@@ -473,3 +473,7 @@ export function seedMasters() {
   for (const [id, m] of Object.entries(MASTERS)) if (!m.store) out[id] = m.seed.map(r => ({ ...r }));
   return out;
 }
+
+/** optFrom のコレクション名を、編集用マスタのIDに直す。
+ *  clients/sites/guards は state 直下の業務データで、マスタIDとは名前が違う */
+export const masterIdOf = k => ({ clients: 'client', sites: 'siteM', guards: 'guardM', education: 'eduM' }[k] || k);

@@ -1,6 +1,6 @@
-import { state, ui, queuedCount } from './store.js?v=7';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js?v=7';
-import { calcPay } from './prints.js?v=7';
+import { state, ui, queuedCount } from './store.js?v=9';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, parseHM, pad } from './util.js?v=9';
+import { calcPay } from './prints.js?v=9';
 
 const site = id => state.sites.find(s => s.id === id);
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -173,7 +173,7 @@ function shiftDetailView(g) {
   const mates = state.shifts
     .filter(x => x.date === sh.date && x.siteId === sh.siteId && x.guardId !== g.id)
     .map(x => state.guards.find(gg => gg.id === x.guardId).name).join('、') || 'なし';
-  const q = encodeURIComponent(s.addrFull);
+  const q = encodeURIComponent(s.addrFull || s.addr || s.name || '');
   const row = (ic, label, val) => `<div class="dt-row">
     <span class="dt-label">${ic} ${label}</span><span class="dt-val">${esc(val) || '&nbsp;'}</span>
   </div>`;

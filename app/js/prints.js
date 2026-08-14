@@ -1,6 +1,6 @@
-import { state, masterRows } from './store.js?v=7';
-import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js?v=7';
-import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js?v=7';
+import { state, masterRows } from './store.js?v=9';
+import { esc, yen, fmtMD, shiftMinutes, hrs, fmtAbs, addDays, todayKey, toKey } from './util.js?v=9';
+import { periodRows, ganttPeriod, visibleGuards, wageOf, hourlyOf, workKindOf, kindNo, billOf, billRateOf, needOf } from './gantt.js?v=9';
 
 // ---- 給与明細（隊員アプリ/PC共通） ----
 // 実際の勤務データ（打刻）から、指定月の給与を組み立てる

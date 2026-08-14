@@ -1,21 +1,18 @@
 import {
-  state, ui, subscribe, rerender, resetDemo, loadDemo, isDemo, setupSteps, punch, toggleOffline,
-  checkAssign, assign, unassign, undoUnassign, addNotice, commit,
-  getSaveError, setWeather, masterRows, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus,
-  editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit,
-} from './store.js?v=7';
-import { renderGuard } from './guard.js?v=7';
-import { renderAdmin } from './admin.js?v=7';
+  state, ui, subscribe, rerender, resetDemo, loadDemo, isDemo, setupSteps, punch, toggleOffline, checkAssign, assign, unassign, undoUnassign, addNotice, commit, getSaveError, setWeather, masterRows, masterSet, masterMulti, masterAdd, masterDel, setOption, setOrder, setAllowance, setBonus, editPunch, bulkUpdate, purgeBefore, requestLeave, cancelLeave, setLeave, toggleDeposit, addLeave,
+} from './store.js?v=9';
+import { renderGuard } from './guard.js?v=9';
+import { renderAdmin, leaveForm } from './admin.js?v=9';
 import {
   payslipPrintHTML, invoiceHTML, rosterHTML, scheduleHTML, wageSheetHTML,
   workReportHTML, billSheetHTML, depositListHTML, payListHTML, payslipAllHTML,
   dmHTML, codebookHTML, paidHTML, setMastersRef, co,
   nippoHTML, eduSheetHTML, chinginHTML, contractHTML,
-} from './prints.js?v=7';
-import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=7';
-import { MASTERS } from './masters.js?v=7';
-import { findItem, GROUPS } from './menu.js?v=7';
-import { zenginRecords, quickForm, quickSave } from './screens.js?v=7';
+} from './prints.js?v=9';
+import { addDays, todayKey, addMonths, esc, fmtMD } from './util.js?v=9';
+import { MASTERS, masterIdOf } from './masters.js?v=9';
+import { findItem, GROUPS } from './menu.js?v=9';
+import { zenginRecords, quickForm, quickSave, quickRead } from './screens.js?v=9';
 
 // ---- テーマ（実機準拠でライトが既定） ----
 const THEMES = ['light', 'dark'];
@@ -90,21 +87,19 @@ function findItemByMaster(mid) {
 }
 
 /** その場で1件追加するフォームを開く。onDone があれば追加後に呼ぶ */
-function openQuick(mid, onDone, after = '', site = '') {
+function openQuick(mid, { prefill = {}, onDone } = {}) {
   const m = MASTERS[mid];
   if (!m) return;
   ask({
     title: m.quickTitle || `${m.name}に追加`,
     ok: '登録する',
-    body: quickForm(mid)
+    body: quickForm(mid, prefill)
       + `<p class="qf-note">ここで入力しなかった項目は、あとから<b>${esc(m.name)}</b>で追加できます。</p>`,
     run: box => {
       const r = quickSave(mid, box);
-      if (r.error) { toast('⚠ ' + r.error, 'warn'); return; }
+      if (r.error) { toast('⚠ ' + r.error, 'warn'); return false; }
       const name = r.row.name || r.row.guardName || r.row.code || '1件';
-      if (onDone) { onDone(r.row); toast(`✓ ${name} を登録して選択しました`); return; }
-      // 隊員を足した流れなら、そのまま現場に配置するところまでやる
-      if (after === 'assign' && site) { tryAssign(r.row.id, site); return; }
+      if (onDone) { onDone(r.row); return; }
       toast(`✓ ${name} を登録しました`, 'ok',
         { label: '詳しく編集', run: () => { ui.adminTab = quickTab(mid); rerender(); } });
     },
@@ -188,9 +183,11 @@ document.addEventListener('click', async e => {
       run: () => { loadDemo(); toast('デモデータを入れました'); } });
   }
   else if (a === 'ask-ok') {
-    const run = pendingAsk, box = document.querySelector('.ask');   // 消す前に入力値を読めるようにする
+    const box = document.querySelector('.ask');            // 消す前に入力値を読めるようにする
+    // run が false を返したら「入力に不備あり」。入力を保ったまま開いておく
+    if (pendingAsk && pendingAsk(box) === false) return;
     pendingAsk = null; ui.ask = null;
-    if (run) run(box); else rerender();
+    rerender();                                            // 保存しない処理でも必ず閉じる
   }
   else if (a === 'ask-cancel') { pendingAsk = null; ui.ask = null; rerender(); }
   else if (a === 'gtab') { ui.guardTab = t.dataset.tab; ui.shiftDetail = null; ui.noticeId = null; rerender(); }
@@ -255,9 +252,33 @@ document.addEventListener('click', async e => {
   }
   // --- 新メニュー・マスタ ---
   else if (a === 'open-item') { ui.adminTab = t.dataset.item; ui.masterQ = ''; rerender(); }
-  else if (a === 'master-add') { masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
+  else if (a === 'master-add') { ui.masterQ = ''; masterAdd(t.dataset.m); toast('行を追加しました。値を入力してください'); }
   // マスタ管理を開かずに、その画面から直接1件足す
-  else if (a === 'quick-add') { openQuick(t.dataset.m, null, t.dataset.then || '', t.dataset.site || ''); }
+  else if (a === 'quick-add') {
+    ui.masterQ = '';                                   // 絞り込み中でも追加した行が見えるように
+    const outer = t.closest('.ask') && t.closest('.ask').querySelector('.qf[data-qm]');
+    if (!outer) { openQuick(t.dataset.m); return; }
+    // 「先に◯◯を登録する」から来た場合。入力済みの内容を退避し、登録後に戻す
+    const omid = outer.dataset.qm, keep = quickRead(omid, t.closest('.ask')), k = t.dataset.k;
+    openQuick(t.dataset.m, {
+      onDone: row => {
+        const v = row.name || row.code || '';
+        toast(`✓ ${v} を登録しました。続けて入力してください`);
+        openQuick(omid, { prefill: { ...keep, [k]: v } });
+      },
+    });
+  }
+  else if (a === 'add-leave') {
+    ask({ title: '休暇を代理登録', ok: '登録する',
+      body: leaveForm() + '<p class="qf-note">電話や当日連絡で受けた休みをここで登録します。'
+        + '<b>承認済</b>にすると、その日は配置できなくなり、有給の取得日数にも反映されます。</p>',
+      run: box => {
+        const g = box.querySelector('#lv-guard'), d = box.querySelector('#lv-date');
+        if (!g || !g.value || !d || !d.value) { toast('⚠ 隊員と希望日を入れてください', 'warn'); return false; }
+        addLeave(g.value, d.value, box.querySelector('#lv-reason').value.trim(), box.querySelector('#lv-status').value);
+        toast('✓ 休暇を登録しました');
+      } });
+  }
   else if (a === 'master-del') {
     const m = t.dataset.m, i = Number(t.dataset.i);
     const row = masterRows(m)[i] || {};
@@ -404,12 +425,14 @@ document.addEventListener('change', e => {
   if (el.tagName === 'SELECT' && el.value === '__add__' && el.dataset.mf) {
     const mid = el.closest('table') ? el.closest('.pc-main').querySelector('[data-action="master-add"],[data-action="quick-add"]')?.dataset.m : null;
     const f = mid && (MASTERS[mid].fields.find(x => x.k === el.dataset.mf));
-    const srcId = f && (f.optFrom === 'clients' ? 'client' : f.optFrom === 'sites' ? 'siteM'
-      : f.optFrom === 'guards' ? 'guardM' : f.optFrom);
+    const srcId = f && masterIdOf(f.optFrom);
     el.value = '';
     if (srcId && MASTERS[srcId]) {
       const back = { mid, i: Number(el.dataset.i), k: el.dataset.mf };
-      openQuick(srcId, row => { masterSet(back.mid, back.i, back.k, row.name || row.code || ''); });
+      openQuick(srcId, { onDone: row => {
+        masterSet(back.mid, back.i, back.k, row.name || row.code || '');
+        toast(`✓ ${row.name || row.code} を登録して選択しました`);
+      } });
     }
     return;
   }
@@ -430,6 +453,7 @@ document.addEventListener('change', e => {
 
 // キーボード操作：Enter/Space で開く、Esc で閉じる
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && ui.ask) { pendingAsk = null; ui.ask = null; rerender(); return; }
   if (e.key === 'Escape' && ui.detailShift) { ui.detailShift = null; rerender(); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.action === 'open-shift') {
     e.preventDefault(); ui.detailShift = e.target.dataset.shift; rerender();

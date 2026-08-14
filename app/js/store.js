@@ -1,6 +1,6 @@
-import { seedData, emptyData, demoData } from './data.js?v=7';
-import { seedMasters, MASTERS } from './masters.js?v=7';
-import { toKey, todayKey, uid } from './util.js?v=7';
+import { seedData, emptyData, demoData } from './data.js?v=9';
+import { seedMasters, MASTERS } from './masters.js?v=9';
+import { toKey, todayKey, uid } from './util.js?v=9';
 
 // 保存キー。データの形を変えたら上げる。
 // 古い端末に残ったデモデータで初期状態が見えなくなるのを防ぐ
@@ -184,6 +184,12 @@ export function addNotice(title, body) {
 
 export function requestLeave(guardId, date, reason) {
   state.leaves.unshift({ id: uid('lv'), guardId, date, reason, status: 'pending', at: new Date().toISOString() });
+  commit();
+}
+
+/** 管制側からの代理登録。電話・当日連絡で受けた休みをここで入れる */
+export function addLeave(guardId, date, reason, status = 'approved') {
+  state.leaves.unshift({ id: uid('lv'), guardId, date, reason: reason || '', status, at: new Date().toISOString() });
   commit();
 }
 

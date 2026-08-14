@@ -1,13 +1,13 @@
-import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=7';
-import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=7';
-import { calcPay } from './prints.js?v=7';
-import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=7';
-import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=7';
-import { MASTERS } from './masters.js?v=7';
+import { state, ui, canSee, currentAuth, currentStaff, setupSteps } from './store.js?v=9';
+import { todayKey, addDays, fmtMD, fmtTime, esc, yen, shiftMinutes, parseHM, nowMin, hrs } from './util.js?v=9';
+import { calcPay } from './prints.js?v=9';
+import { ganttView, wageOf, billOf, needOf, kindNo, billRateOf, clientTotals } from './gantt.js?v=9';
+import { GROUPS, PINNED, findItem, findGroup } from './menu.js?v=9';
+import { MASTERS } from './masters.js?v=9';
 import {
   groupView, masterView, orderView, actualView, allowanceView, bonusView,
   zenginView, ledgerView, forecastView, paidView, maintView, masterPrintView,
-} from './screens.js?v=7';
+} from './screens.js?v=9';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -420,9 +420,29 @@ function reportsView() {
 }
 
 // ================= 有休管理 =================
+/** 管制側から休暇を入れるフォーム。隊員アプリからの申請を待たずに登録できるようにする */
+export function leaveForm() {
+  return `<div class="qf" data-qm="__leave">
+    <label class="qf-row"><span>隊員<i>必須</i></span>
+      <select id="lv-guard">${state.guards.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></label>
+    <label class="qf-row"><span>希望日<i>必須</i></span><input type="date" id="lv-date" value="${todayKey()}"></label>
+    <label class="qf-row"><span>理由</span><input type="text" id="lv-reason" placeholder="私用・通院・家庭の事情 など"></label>
+    <label class="qf-row"><span>状態</span>
+      <select id="lv-status"><option value="approved">承認済</option><option value="pending">申請中</option></select></label>
+  </div>`;
+}
+
 function leaveAdminView() {
   const st = { pending: ['申請中', 'st-scheduled'], nego: ['交渉可', 'st-nego'], approved: ['承認済', 'st-onduty'], rejected: ['棄却', 'st-alert'] };
+  if (!state.guards.length)
+    return blank('✈️', '隊員がまだ登録されていません',
+      '休暇の申請・承認は隊員ごとに管理します。<br>隊員を登録すると、この画面で申請の承認や代理登録ができます。',
+      { m: 'guardM', label: '＋ 隊員を追加' });
   return `
+    <div class="pc-pager"><b>休暇申請の承認</b>
+      <span class="pc-muted small">${state.leaves.filter(l => l.status === 'pending').length}件が承認待ち</span>
+      <span style="margin-left:auto"></span>
+      <button class="add-inline" data-action="add-leave">＋ 休暇を代理登録</button></div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
       <thead><tr><th>隊員</th><th>希望日</th><th>理由</th><th>状態</th><th>操作</th></tr></thead>
       <tbody>${state.leaves.map(l => `<tr>

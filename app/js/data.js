@@ -1,5 +1,5 @@
-import { todayKey, addDays, fromKey, uid } from './util.js?v=7';
-import { seedMasters } from './masters.js?v=7';
+import { todayKey, addDays, fromKey, uid } from './util.js?v=9';
+import { seedMasters } from './masters.js?v=9';
 
 // デモ用データ。日付は常に「今日」を基準に生成する
 export function demoData() {

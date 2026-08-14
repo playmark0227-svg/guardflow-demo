@@ -1,10 +1,10 @@
-import { state, ui, commit, paidGrantOf, masterRows, masterAdd, masterSet, defaultsFor } from './store.js?v=7';
-import { blank } from './admin.js?v=7';
-import { MASTERS } from './masters.js?v=7';
-import { GROUPS, findGroup } from './menu.js?v=7';
-import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=7';
-import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=7';
-import { co } from './prints.js?v=7';
+import { state, ui, commit, paidGrantOf, masterRows, masterAdd, masterSet, defaultsFor } from './store.js?v=9';
+import { blank } from './admin.js?v=9';
+import { MASTERS, masterIdOf } from './masters.js?v=9';
+import { GROUPS, findGroup } from './menu.js?v=9';
+import { esc, yen, fmtMD, todayKey, addDays, hrs, shiftMinutes } from './util.js?v=9';
+import { wageOf, periodRows, clientTotals, needOf } from './gantt.js?v=9';
+import { co } from './prints.js?v=9';
 
 const guard = id => state.guards.find(g => g.id === id);
 const site = id => state.sites.find(s => s.id === id);
@@ -53,8 +53,7 @@ function cell(f, v, i, mid) {
   if (f.t === 'multi') return multiCell(f, v, i, mid);
   if (f.t === 'chk') return `<input type="checkbox" ${nm} ${val ? 'checked' : ''}>`;
   if (f.t === 'sel') {
-    const src = f.optFrom && MASTERS[f.optFrom === 'clients' ? 'client' : f.optFrom === 'sites' ? 'siteM'
-      : f.optFrom === 'guards' ? 'guardM' : f.optFrom];
+    const src = f.optFrom && MASTERS[masterIdOf(f.optFrom)];
     // 参照先マスタにその場で足せるようにする（選ぶ→無い→マスタ管理へ、を往復させない）
     const addOpt = src && src.quick ? `<option value="__add__">＋ ${esc(src.quickTitle || src.name)}…</option>` : '';
     return `<select ${nm}><option value=""></option>${optionsFor(f, mid).map(o =>
@@ -107,15 +106,20 @@ export function masterView(mid) {
 /** その場で追加するための小さなフォーム。
  *  表形式のマスタエディタは項目が多すぎるので、業務が回るのに要る項目だけを聞く。
  *  optFrom で他マスタを参照する欄は、参照先が0件なら「先に◯◯を登録」と促す */
-export function quickForm(mid) {
+export function quickForm(mid, prefill = {}) {
   const m = MASTERS[mid];
   if (!m) return '';
   const keys = m.quick || m.fields.filter(f => f.req).map(f => f.k);
   // 既定値のうち「（新しい配置先）」のような仮の名前は入れない。
   // 入れると必須チェックを素通りして、仮の名前のまま登録されてしまう
-  const row = defaultsFor(mid);
-  Object.keys(row).forEach(k => { if (typeof row[k] === 'string' && row[k].startsWith('（新しい')) row[k] = ''; });
-  return `<div class="qf">${keys.map(k => {
+  const row = { ...defaultsFor(mid), ...prefill };
+  Object.keys(row).forEach(k => {
+    const f = m.fields.find(x => x.k === k);
+    if (typeof row[k] === 'string' && row[k].startsWith('（新しい')) row[k] = '';
+    // 必須の金額を0で出すと、そのまま登録されて0円請求・0円時給になる
+    if (f && f.req && row[k] === 0) row[k] = '';
+  });
+  return `<div class="qf" data-qm="${esc(mid)}">${keys.map(k => {
     const f = m.fields.find(x => x.k === k);
     if (!f) return '';
     const v = row[k] ?? '';
@@ -132,8 +136,12 @@ export function quickForm(mid) {
       input = opts.length
         ? `<select id="${id}">${f.req ? '' : '<option value=""></option>'}${opts.map(o =>
             `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
-        : `<button class="qf-need" data-action="quick-add" data-m="${esc(f.optFrom || '')}">
-             ＋ 先に${esc((MASTERS[f.optFrom] || {}).name || '参照先')}を登録する</button>`;
+        : (() => {
+            const src = MASTERS[masterIdOf(f.optFrom)] || {};
+            return `<button class="qf-need" data-action="quick-add"
+              data-m="${esc(masterIdOf(f.optFrom))}" data-k="${esc(f.k)}">
+              ＋ 先に${esc(src.name || '参照先')}を登録する</button>`;
+          })();
     } else if (f.t === 'chk') {
       input = `<input type="checkbox" id="${id}" ${v ? 'checked' : ''}>`;
     } else {
@@ -144,8 +152,8 @@ export function quickForm(mid) {
   }).join('')}</div>`;
 }
 
-/** クイック追加フォームの入力値を読み取って1件登録する。戻り値は作った行 */
-export function quickSave(mid, box) {
+/** 入力途中の値をそのまま読む（検証しない）。参照先を先に登録する導線で退避に使う */
+export function quickRead(mid, box) {
   const m = MASTERS[mid];
   const keys = m.quick || m.fields.filter(f => f.req).map(f => f.k);
   const vals = {};
@@ -163,8 +171,16 @@ export function quickSave(mid, box) {
       : f.t === 'num' || f.t === 'yen' ? (el.value === '' ? '' : Number(el.value))
       : el.value.trim();
   });
+  return vals;
+}
+
+/** クイック追加フォームの入力値を読み取って1件登録する。戻り値は作った行 */
+export function quickSave(mid, box) {
+  const m = MASTERS[mid];
+  const keys = m.quick || m.fields.filter(f => f.req).map(f => f.k);
+  const vals = quickRead(mid, box);
   const req = m.fields.filter(f => f.req && keys.includes(f.k));
-  const blank = v => v == null || v === '' || (Array.isArray(v) && !v.length);
+  const blank = v => v == null || v === '' || v === 0 || (Array.isArray(v) && !v.length);
   const miss = req.find(f => blank(vals[f.k]));
   if (miss) return { error: `${miss.l}を入力してください` };
   masterAdd(mid);
@@ -278,7 +294,10 @@ export function allowanceView() {
   const val = (gid, k) => ((state.allowances[m] || {})[gid] || {})[k] ?? '';
   return `
     <div class="pc-pager"><b>${m.replace('-', '年')}月度 手当・控除入力</b>
-      <span class="pc-muted small">固定支給・任意控除を隊員ごとに登録します</span></div>
+      <span class="pc-muted small">固定支給・任意控除を隊員ごとに登録します</span>
+      <span style="margin-left:auto"></span>
+      <button class="add-inline" data-action="quick-add" data-m="payItem">＋ 支給項目を追加</button>
+      <button class="add-inline" data-action="quick-add" data-m="dedItem">＋ 控除項目を追加</button></div>
     <div class="pc-card pc-table-wrap"><table class="pc-table">
       <thead><tr><th>隊員</th>
         ${pay.map(p => `<th class="num">${esc(p.name)}</th>`).join('')}
